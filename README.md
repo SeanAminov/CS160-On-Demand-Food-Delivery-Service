@@ -14,14 +14,41 @@ What we're using:
 
 ## How to run it
 
-You need Node.js 20 or newer.
+The commands are the same on Windows and Mac. The only differences are how you install Node.js and how you open a terminal in the project folder.
+
+### 1. Install Node.js
+
+You need Node.js 20 or newer. To check what you have, run `node -v` in a terminal.
+
+* Windows: download the LTS installer from https://nodejs.org and run it.
+* Mac: download the LTS installer from https://nodejs.org, or if you use Homebrew, run `brew install node`.
+
+### 2. Get the code
+
+Clone the repo with GitHub Desktop, or run this in a terminal:
+
+    git clone https://github.com/SeanAminov/CS160-On-Demand-Food-Delivery-Service.git
+
+### 3. Open a terminal in the project folder
+
+* VS Code (Windows or Mac): open the project folder, then go to Terminal > New Terminal. It opens in the right folder.
+* Windows without VS Code: open the folder in File Explorer, right click an empty spot, and choose Open in Terminal.
+* Mac without VS Code: open the Terminal app, type `cd ` with a space after it, drag the project folder into the window, and press Return.
+
+### 4. Install and start
 
     npm install
     npm run dev
 
+You only need `npm install` the first time, and again after pulling changes that add new packages.
+
 Then go to http://localhost:3000
 
 `npm run dev` restarts the server when you save a file. If you only changed something in the public folder, just refresh the page.
+
+To stop the server, click in the terminal and press Control and C together. This is Control on a Mac too, not Command.
+
+If you get an error saying port 3000 is already in use, the server is probably still running in another terminal. Stop that one first.
 
 ## Folders
 
