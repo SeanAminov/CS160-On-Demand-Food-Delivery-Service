@@ -1,3 +1,67 @@
+CREATE DATABASE IF NOT EXISTS food_delivery_db;
+USE food_delivery_db;
+
+CREATE TABLE IF NOT EXISTS Users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('customer', 'employee', 'manager') NOT NULL DEFAULT 'customer',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    stripe_customer_id VARCHAR(255) UNIQUE NULL
+);
+
+CREATE TABLE IF NOT EXISTS Products (
+    product_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    category VARCHAR(100) NOT NULL DEFAULT 'Other',
+    description TEXT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    weight DECIMAL(8,2) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS Inventory (
+    inventory_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL UNIQUE,
+    quantity INT NOT NULL DEFAULT 0,
+    reorder_level INT NOT NULL DEFAULT 10,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Orders (
+    order_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    total_weight DECIMAL(8,2) NOT NULL,
+    delivery_fee DECIMAL(10,2) NOT NULL,
+    tax_amount DECIMAL(10,2) NOT NULL,
+    total_price DECIMAL(10,2) NOT NULL,
+    delivery_address VARCHAR(255) NOT NULL,
+    delivery_lat DECIMAL(9,6) NOT NULL,
+    delivery_lng DECIMAL(9,6) NOT NULL,
+    status ENUM(
+        'Pending', 'Preparing', 'Staged', 'Out for Delivery',
+        'Delivered', 'Failed', 'Cancelled'
+    ) NOT NULL DEFAULT 'Pending',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS OrderItems (
+    order_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    unit_weight DECIMAL(8,2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES Orders(order_id)
+        ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
 
@@ -29,7 +93,7 @@ CREATE TABLE IF NOT EXISTS Transactions (
 CREATE TABLE IF NOT EXISTS DeliveryOrders (
     delivery_order_id INT AUTO_INCREMENT PRIMARY KEY,
     delivery_id INT NOT NULL,
-    order_id INT NOT NULL UNIQUE,
+order_id INT NOT NULL UNIQUE,
     stop_sequence INT NULL,
     estimated_arrival DATETIME NULL,
     FOREIGN KEY (delivery_id) REFERENCES Deliveries(delivery_id)
@@ -125,4 +189,4 @@ SELECT
     i.quantity,
     p.active
 FROM Products p
-JOIN Inventory i ON p.product_id = i.product_id
+JOIN Inventory i ON p.product_id = i.product_id;
