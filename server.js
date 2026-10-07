@@ -4,9 +4,11 @@ const pool = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const userRoutes = require('./routes/users');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
 
 app.get('/products', async (req, res) => {
   try {
@@ -33,6 +35,8 @@ app.get('/products', async (req, res) => {
     });
   }
 });
+
+app.use('/', userRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
