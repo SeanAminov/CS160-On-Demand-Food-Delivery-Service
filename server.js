@@ -1,16 +1,42 @@
 const express = require('express');
 const path = require('path');
-const products = require('./data/products');
+const pool = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const userRoutes = require('./routes/users');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/products', (req, res) => {
-  res.json(products);
+
+app.get('/products', async (req, res) => {
+  try {
+    const [products] = await pool.query(`
+      SELECT
+        p.product_id,
+        p.name,
+        p.description,
+        p.price,
+        p.weight,
+        p.active,
+        i.quantity
+      FROM Products AS p
+      JOIN Inventory AS i
+        ON p.product_id = i.product_id
+      WHERE p.active = TRUE
+    `);
+
+    res.json(products);
+  } catch (error) {
+    console.error('Error loading products:', error);
+    res.status(500).json({
+      error: 'Failed to load products'
+    });
+  }
 });
+
+app.use('/', userRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
