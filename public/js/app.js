@@ -6,6 +6,9 @@ import checkout from './pages/checkout.js';
 import orders from './pages/orders.js';
 import employee from './pages/employee.js';
 import manager from './pages/manager.js';
+import employeePacking from './pages/employee-packing.js';
+import employeeOrderPacking from './pages/employee-order-packing.js';
+import employeeShipping from './pages/employee-shipping.js';
 
 // the part of the URL after # decides which page to show
 const pages = {
@@ -17,11 +20,16 @@ const pages = {
   '/orders': orders,
   '/employee': employee,
   '/manager': manager,
+  '/employee-packing': employeePacking,
+  '/employee-order-packing': employeeOrderPacking,
+  '/employee-shipping': employeeShipping,
 };
 
 function showPage() {
-  const path = window.location.hash.slice(1) || '/';
+  const rawPath = window.location.hash.slice(1) || '/';
+  const path = rawPath.split('?')[0];
   const page = pages[path] || home;
+
 
   document.title = page.title + ' | OFS';
   page.show(document.getElementById('app'));

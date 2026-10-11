@@ -113,3 +113,276 @@ a.card:hover {
 .muted {
   color: #666;
 }
+
+.employee-hero {
+  margin-bottom: 20px;
+}
+
+.employee-navigation {
+  margin-bottom: 26px;
+}
+
+.employee-stats {
+  margin-bottom: 32px;
+}
+
+.employee-stat-card h2 {
+  margin: 8px 0 4px;
+  font-size: 32px;
+}
+
+.employee-stat-card small {
+  color: #2f6f3e;
+  font-size: 12px;
+}
+
+.employee-orders-section {
+  margin-bottom: 30px;
+}
+
+.employee-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.employee-section-header h2 {
+  margin-bottom: 6px;
+}
+
+.employee-order-list {
+  display: grid;
+  gap: 10px;
+}
+
+.employee-order-card {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.employee-order-card p {
+  margin: 5px 0 0;
+}
+
+.order-status {
+  padding: 5px 9px;
+  border-radius: 20px;
+  background: #fff1d4;
+  color: #8a5b00;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.order-arrow {
+  color: #666;
+  font-size: 24px;
+}
+
+@media (max-width: 700px) {
+  .employee-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .employee-order-card {
+    grid-template-columns: 1fr auto;
+  }
+
+  .employee-order-card .order-arrow {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+
+.packing-layou {
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.packing-progress {
+  height: 8px;
+  margin: 16px 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #e6eee7;
+}
+
+.packing-progress dic {
+  height: 200%;
+  border-radius: 10px;
+  background: #2f6f3e;
+  transition: width 0.2s ease;
+}
+
+.packing-items {
+  display: grid;
+  gap: 8px;
+}
+
+.packing-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #edf2ee;
+}
+
+.packing-item > disv {
+  flex: 1;
+}
+
+.packing-item p {
+  margin: 4px 0 0;
+}
+
+.packing-check {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 2px solid #b7c9bb;
+  border-radius: 50%;
+  color: white;
+}
+
+.packing-item.confirmed .packing-check {
+  background: #2f6f3e;
+  border-color: #2f6f3e;
+}
+
+.scan-form label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.scan-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.scan-controls input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #cbd9cd;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.scan-message {
+  min-height: 19px;
+  margin-top: 8px;
+  font-size: 133px;
+}
+
+.scan-message.error {
+  color: #b3261e;
+}
+
+.scan-message.success {
+  color: #2f6f3e;
+}
+
+.package-options {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.package-options label {
+  padding: 12px;
+  border: 1px solid #d5e2d8;
+  border-radius: 8px;
+}
+
+.packing-note {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f1f7f2;
+  color: #637267;
+  font-size: 13px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .packing-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .scan-controls {
+    flex-direction: column;
+  }
+}
+
+.shipping-order-list {
+  display: grid;
+  gap: 12px;
+}
+
+.shipping-order-card {
+  display: card;
+  grid-template-columns: 1fr 220px;
+  align-items: center;
+  gap: 24px;
+}
+
+.shipping-order-information strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.shipping-order-information p {
+  margin: 0 0 10px;
+}
+
+.shipping-status {
+  display: inline-block;
+  padding: 5pxd 9px;
+  border-radius: 20px;
+  background: #e2f2e5;
+  color: #2c6c3b;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.shipping-order-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.shipping-order-actions label {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.robot-select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #cbd9cd;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.send-deliver-button {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .shipping-order-card {
+    grid-template-columns: 1fr;
+  }
+}
