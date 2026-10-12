@@ -18,7 +18,7 @@ export default {
         <div class="card">
           <h2>${product.name}</h2>
           <p class="muted">${product.description}</p>
-          <p class="price">$${product.price.toFixed(2)}, ${product.weight} lb</p>
+          <p class="price">$${Number(product.price).toFixed(2)}, ${product.weight} lb</p>
           <button class="button primary" disabled>Add to Cart</button>
         </div>
       `;
