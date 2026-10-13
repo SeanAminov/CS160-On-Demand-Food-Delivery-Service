@@ -34,9 +34,10 @@ export default {
         });
         const data = await response.json();
         if (response.ok){
+          localStorage.setItem('user', JSON.stringify({user_id: data.user_id, role: data.role}));
           switch (data.role){
             case "customer":
-              window.location.hash = "#/customer";
+              window.location.hash = "#/catalog";
               break;
             case "employee":
               window.location.hash = "#/employee";

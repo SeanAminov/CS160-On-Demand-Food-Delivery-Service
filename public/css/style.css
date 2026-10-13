@@ -113,3 +113,32 @@ a.card:hover {
 .muted {
   color: #666;
 }
+
+.message {
+  color: #a12a2a;
+  min-height: 1em;
+}
+
+table.cart {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  background: white;
+}
+
+table.cart th,
+table.cart td {
+  padding: 10px;
+  border-bottom: 1px solid #d5e2d8;
+  text-align: left;
+}
+
+.button.small {
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.summary {
+  max-width: 360px;
+  margin-bottom: 20px;
+}
