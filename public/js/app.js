@@ -27,7 +27,54 @@ function showPage() {
   const page = pages[path] || home;
   document.title = page.title + ' | OFS';
   page.show(document.getElementById('app'));
+  loginUpdate();
 }
+let loggedIn = false;
+async function loginUpdate(){
+  const welcome = document.getElementById('welcome');
+  const login = document.getElementById('login');
+  try{
+    const response = await fetch('/profile');
+    if (!response.ok){
+      loggedIn = false;
+      welcome.hidden = true;
+      login.textContent = 'Log In';
+      return;
+    }
+    const user = await response.json();
+    loggedIn = true;
+    welcome.textContent =  `Welcome ${user.role}: ${user.name}`;
+    welcome.hidden = false;
+    login.textContent = 'Log Out';
+  }
+  catch (error){
+    console.error('Can not access info', error);
+    welcome.hidden = true;
+  }
+}
+document.getElementById('login').addEventListener('click', async (e) =>{
+  if (!loggedIn) return;
+  e.preventDefault();
+  try{
+    const response = await fetch('/logout', {method: 'POST'});
+    if (!response.ok) throw new Error('Logout failed');
+  }
+  catch (error){
+    console.error(error);
+    return;
+  }
+  loggedIn = false;
+  if(window.location.hash === '#login')
+  {
+  showPage();
+  } 
+  else{
+    window.location.hash = '#/login';
+  }
+
+});
+
+
 
 window.addEventListener('hashchange', showPage);
 showPage();

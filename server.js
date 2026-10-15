@@ -1,4 +1,5 @@
 const express = require('express');
+const session = require('express-session');
 const path = require('path');
 const pool = require('./db');
 
@@ -6,10 +7,17 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const userRoutes = require('./routes/users');
 const cartRoutes = require('./routes/cart');
+const employeeRoutes = require('./routes/employee');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {httpOnly: true, sameSite: 'lax', maxAge: 1000*60*30}
+}));
 
 app.get('/products', async (req, res) => {
   try {
@@ -39,6 +47,7 @@ app.get('/products', async (req, res) => {
 
 app.use('/', userRoutes);
 app.use('/', cartRoutes);
+app.use('/', employeeRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
