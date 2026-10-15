@@ -10,8 +10,8 @@ export default {
       <div class="account-wrapper">
       <h1>Log In</h1>
       <form id="login-form">
-      <div class="input-field"><input type="email" name="email" id="email" placeholder="Email" required></div>
-      <div class="input-field"><input type="password" name="password" id="password" placeholder="Password" required></div>
+      <div class="input-field"><input type="email" name="email" id="email" placeholder="Email" required><i class='bx bxs-envelope' ></i></div>
+      <div class="input-field"><input type="password" name="password" id="password" placeholder="Password" required><i class='bx bxs-lock-alt' ></i></div>
       <button class="button primary" type="submit">Log In</button>
       <div class="redirects">
       <a class = "button">Forgot Password</a>

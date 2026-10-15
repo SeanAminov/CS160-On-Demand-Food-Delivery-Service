@@ -63,7 +63,15 @@ document.getElementById('login').addEventListener('click', async (e) =>{
     console.error(error);
     return;
   }
+  loggedIn = false;
+  if(window.location.hash === '#login')
+  {
   showPage();
+  } 
+  else{
+    window.location.hash = '#/login';
+  }
+
 });
 
 

@@ -5,10 +5,10 @@ export default {
         <div class="account-wrapper register">
         <h1>Register</h1>
         <form id = "register-form">   
-        <div class="input-field"><input type="text" name="name" id="name" placeholder="Name" required> </div>
-        <div class="input-field"><input type="email" name="email" id="email" placeholder="Email" required></div>
-        <div class="input-field"><input type="password" name="password" id="password" placeholder="Password" required></div>
-        <div class="input-field"><input type="password" name="confirmPassword" id="confirmPassword" placeholder="Confirm Password" required></div>
+        <div class="input-field"><input type="text" name="name" id="name" placeholder="Name" required><i class='bx bxs-user' ></i></div>
+        <div class="input-field"><input type="email" name="email" id="email" placeholder="Email" required><i class='bx bxs-envelope'></i></div>
+        <div class="input-field"><input type="password" name="password" id="password" placeholder="Password" required><i class='bx bxs-lock-alt' ></i></div>
+        <div class="input-field"><input type="password" name="confirmPassword" id="confirmPassword" placeholder="Confirm Password" required><i class='bx bxs-lock-alt' ></i></div>
         <button class="button primary" type="submit">Create Account</button>
         <div class="redirects">
         <label for="login"> Already have an account?</label>
