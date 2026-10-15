@@ -2,6 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const pool = require('./db');
+const {loginVerification, roleVerification} = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,7 +48,9 @@ app.get('/products', async (req, res) => {
 
 app.use('/', userRoutes);
 app.use('/', cartRoutes);
-app.use('/', employeeRoutes);
+// Only employees and managers can get employee data.
+// This is the real check, since anyone can open the page files in a browser.
+app.use('/employee', loginVerification, roleVerification('employee', 'manager'), employeeRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

@@ -1,21 +1,9 @@
-// Shared helpers for the cart. Login saves the user here until we have sessions.
-
-export function getUser() {
-  try {
-    return JSON.parse(localStorage.getItem('user'));
-  } catch {
-    return null;
-  }
-}
+// Shared helpers for the cart. The session cookie tells the server who is logged in.
 
 export async function cartRequest(method, url, body) {
-  const user = getUser();
   const response = await fetch(url, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Id': user ? user.user_id : '',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await response.json();
