@@ -1,6 +1,6 @@
 // TODO: filter by category (fruits, vegetables, pantry)
 
-import { getUser, cartRequest, money } from '../cart-api.js';
+import { cartRequest, money } from '../cart-api.js';
 
 export default {
   title: 'Shop',
@@ -38,10 +38,6 @@ export default {
 
     for (const button of app.querySelectorAll('.add')) {
       button.addEventListener('click', async () => {
-        if (!getUser()) {
-          message.textContent = 'Please log in to add items to your cart.';
-          return;
-        }
         try {
           const cart = await cartRequest('POST', '/cart/items', { productId: Number(button.dataset.id), quantity: 1 });
           message.textContent = `Added to cart. Cart total is ${money(cart.subtotal)}, ${cart.totalWeight} lb.`;

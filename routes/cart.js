@@ -5,11 +5,9 @@ const router = express.Router();
 const FREE_DELIVERY_LIMIT = 20;
 const DELIVERY_FEE = 10;
 
-// For now the browser sends the logged in user's id in a header.
-// Once we have sessions, this should read the user from the session instead.
+// The logged in user comes from the session, not from anything the browser sends
 function getUserId(req) {
-  const id = Number(req.get('X-User-Id'));
-  return Number.isInteger(id) && id > 0 ? id : null;
+  return req.session.user ? req.session.user.user_id : null;
 }
 
 // Finds the user's cart, making one if they don't have it yet.

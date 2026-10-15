@@ -1,9 +1,10 @@
-import { getUser, cartRequest, money } from '../cart-api.js';
+import { cartRequest, money } from '../cart-api.js';
+import { getUser } from '../user.js';
 
 export default {
   title: 'Cart',
   async show(app) {
-    if (!getUser()) {
+    if (!(await getUser())) {
       app.innerHTML = `
         <h1>Your Cart</h1>
         <p class="muted">Please log in to see your cart.</p>

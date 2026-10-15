@@ -7,6 +7,7 @@ import orders from './pages/orders.js';
 import employee from './pages/employee.js';
 import manager from './pages/manager.js';
 import register from './pages/register.js';
+import { getUser } from './user.js';
 
 
 // the part of the URL after # decides which page to show
@@ -22,12 +23,36 @@ const pages = {
   '/register': register,
 };
 
-function showPage() {
+// Pages only some roles can open. Any page starting with /employee is covered,
+// so new employee pages are locked automatically.
+function allowedRoles(path) {
+  if (path.startsWith('/employee')) return ['employee', 'manager'];
+  if (path.startsWith('/manager')) return ['manager'];
+  return null;
+}
+
+async function showPage() {
   const path = window.location.hash.slice(1) || '/';
   const page = pages[path] || home;
+  const app = document.getElementById('app');
   document.title = page.title + ' | OFS';
-  page.show(document.getElementById('app'));
   loginUpdate();
+
+  // This keeps people off pages that aren't theirs. The server still checks the data itself.
+  const roles = allowedRoles(path);
+  if (roles) {
+    const user = await getUser();
+    if (!user) {
+      window.location.hash = '#/login';
+      return;
+    }
+    if (!roles.includes(user.role)) {
+      app.innerHTML = '<h1>Not Allowed</h1><p class="muted">Your account does not have access to this page.</p>';
+      return;
+    }
+  }
+
+  page.show(app);
 }
 let loggedIn = false;
 async function loginUpdate(){
@@ -64,7 +89,7 @@ document.getElementById('login').addEventListener('click', async (e) =>{
     return;
   }
   loggedIn = false;
-  if(window.location.hash === '#login')
+  if(window.location.hash === '#/login')
   {
   showPage();
   } 
