@@ -7,16 +7,22 @@ export default {
   title: 'Log In',
   show(app) {
     app.innerHTML = `
+      <div class="account-wrapper">
       <h1>Log In</h1>
       <form id="login-form">
-      <p>Email: <input type="email" name="email" id="email"></p>
-      <p>Password: <input type="password" name="password" id="password"></p>
-      <button type="submit">Log In</button>
-      <a class = "button" href="#/register">Register</a>
+      <div class="input-field"><input type="email" name="email" id="email" placeholder="Email" required></div>
+      <div class="input-field"><input type="password" name="password" id="password" placeholder="Password" required></div>
+      <button class="button primary" type="submit">Log In</button>
+      <div class="redirects">
+      <a class = "button">Forgot Password</a>
+      <a class = "button" href="#/register">Register Now</a>
+      </div>
       <p id="error" style="color: red;"> </p>
       </form>
+      </div>
       `;
     const form = document.getElementById('login-form');  
+    const error = document.getElementById('error');
     form.addEventListener('submit', async(event) =>{
       event.preventDefault();
       error.textContent = '';
