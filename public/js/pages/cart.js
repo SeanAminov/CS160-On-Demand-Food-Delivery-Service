@@ -69,6 +69,9 @@ function draw(app, cart, note = '') {
       <p>Subtotal: <b>${money(cart.subtotal)}</b></p>
       <p>Total weight: <b>${cart.totalWeight} lb</b></p>
       <p>Delivery fee: <b>${money(cart.deliveryFee)}</b></p>
+      <p>Sales tax (${((cart.taxRate || 0.09375) * 100).toFixed(2)}%): <b>${money(cart.taxAmount || 0)}</b></p>
+      <hr style="border:0; border-top:1px solid #d5e2d8; margin: 8px 0;">
+      <p>Total: <b>${money(cart.total || (cart.subtotal + cart.deliveryFee + (cart.taxAmount || 0)))}</b></p>
       <p class="muted">${feeNote}</p>
     </div>
 

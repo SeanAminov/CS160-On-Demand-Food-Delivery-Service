@@ -58,11 +58,13 @@ let loggedIn = false;
 async function loginUpdate(){
   const welcome = document.getElementById('welcome');
   const login = document.getElementById('login');
+  const empLink = document.getElementById('emp-link');
   try{
     const response = await fetch('/profile');
     if (!response.ok){
       loggedIn = false;
       welcome.hidden = true;
+      if (empLink) empLink.hidden = true;
       login.textContent = 'Log In';
       return;
     }
@@ -70,11 +72,13 @@ async function loginUpdate(){
     loggedIn = true;
     welcome.textContent =  `Welcome ${user.role}: ${user.name}`;
     welcome.hidden = false;
+    if (empLink) empLink.hidden = !(user.role === 'employee' || user.role === 'manager');
     login.textContent = 'Log Out';
   }
   catch (error){
     console.error('Can not access info', error);
     welcome.hidden = true;
+    if (empLink) empLink.hidden = true;
   }
 }
 document.getElementById('login').addEventListener('click', async (e) =>{

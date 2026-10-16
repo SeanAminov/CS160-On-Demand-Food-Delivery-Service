@@ -4,6 +4,7 @@ const router = express.Router();
 
 const FREE_DELIVERY_LIMIT = 20;
 const DELIVERY_FEE = 10;
+const TAX_RATE = process.env.TAX_RATE ? Number(process.env.TAX_RATE) : 0.09375;
 
 // The logged in user comes from the session, not from anything the browser sends
 function getUserId(req) {
@@ -55,11 +56,18 @@ async function buildCart(cartId) {
     deliveryFee = DELIVERY_FEE;
   }
 
+  // Flat sales tax applied to product subtotal only, per Part 2 spec
+  const taxAmount = Number((subtotal * TAX_RATE).toFixed(2));
+  const total = Number((subtotal + deliveryFee + taxAmount).toFixed(2));
+
   return {
     items,
     subtotal: Number(subtotal.toFixed(2)),
     totalWeight: Number(totalWeight.toFixed(2)),
     deliveryFee,
+    taxRate: TAX_RATE,
+    taxAmount,
+    total,
   };
 }
 
@@ -167,4 +175,9 @@ router.delete('/cart/items/:id', async (req, res) => {
   }
 });
 
+router.buildCart = buildCart;
+router.getCartId = getCartId;
+router.TAX_RATE = TAX_RATE;
+
 module.exports = router;
+
