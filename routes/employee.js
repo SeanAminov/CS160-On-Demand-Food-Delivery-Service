@@ -11,7 +11,7 @@ router.get('/orders', async (req, res) => {
       SELECT o.order_id, u.name AS customer, o.total_weight, o.status, o.created_at
       FROM Orders AS o
       JOIN Users AS u ON o.user_id = u.user_id
-      WHERE o.status IN ('Preparing', 'Staged')
+      WHERE o.status IN ('Pending', 'Preparing', 'Staged')
       ORDER BY o.created_at
     `);
     res.json(orders);

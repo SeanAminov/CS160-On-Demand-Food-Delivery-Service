@@ -9,6 +9,8 @@ const PORT = process.env.PORT || 3000;
 const userRoutes = require('./routes/users');
 const cartRoutes = require('./routes/cart');
 const employeeRoutes = require('./routes/employee');
+const orderRoutes = require('./routes/orders');
+const deliveryRoutes = require('./routes/deliveries');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -48,6 +50,8 @@ app.get('/products', async (req, res) => {
 
 app.use('/', userRoutes);
 app.use('/', cartRoutes);
+app.use('/', orderRoutes);
+app.use('/', deliveryRoutes);
 // Only employees and managers can get employee data.
 // This is the real check, since anyone can open the page files in a browser.
 app.use('/employee', loginVerification, roleVerification('employee', 'manager'), employeeRoutes);
