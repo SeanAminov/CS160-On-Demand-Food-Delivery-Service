@@ -1,0 +1,233 @@
+const express = require('express');
+const pool = require('../db');
+const { loginVerification, roleVerification } = require('../auth');
+const router = express.Router();
+
+const MAX_TRIP_ORDERS = 10;
+const MAX_TRIP_WEIGHT = 200.0;
+
+// POST /deliveries/batches (Role: Employee, Manager)
+// Groups staged orders into a robot delivery trip within 10 orders & 200 lbs limits
+router.post('/deliveries/batches', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
+  try {
+    // 1. Fetch staged orders, oldest first
+    const [stagedOrders] = await pool.query(`
+      SELECT order_id, user_id, total_weight, total_price, delivery_address, delivery_lat, delivery_lng, created_at
+      FROM Orders
+      WHERE status = 'Staged'
+      ORDER BY created_at ASC
+    `);
+
+    if (stagedOrders.length === 0) {
+      return res.status(400).json({ error: 'No staged orders available to form a delivery trip.' });
+    }
+
+    // 2. Greedy knapsack selection per Section 6 of Part 2 spec:
+    // Take oldest orders first; if an order would push the trip past 200 lbs, skip it and continue
+    // checking subsequent orders since a smaller order may still fit. Stop when 10 orders reached.
+    const selectedOrders = [];
+    let tripWeight = 0;
+
+    for (const order of stagedOrders) {
+      if (selectedOrders.length >= MAX_TRIP_ORDERS) {
+        break;
+      }
+      const orderWeight = Number(order.total_weight);
+      if (Number((tripWeight + orderWeight).toFixed(2)) <= MAX_TRIP_WEIGHT) {
+        selectedOrders.push(order);
+        tripWeight = Number((tripWeight + orderWeight).toFixed(2));
+      }
+      // If order would push past 200 lbs, skip it and keep checking
+    }
+
+    if (selectedOrders.length === 0) {
+      return res.status(400).json({
+        error: `Could not form a trip. Staged orders individually exceed vehicle limit of ${MAX_TRIP_WEIGHT} lbs.`
+      });
+    }
+
+    // 3. Database transaction to create delivery trip and assign orders
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Estimated metrics (approx. 0.7 miles and 5-7 minutes per stop in Downtown San Jose)
+      const estimatedDistance = Number((selectedOrders.length * 0.75).toFixed(2));
+      const estimatedDuration = selectedOrders.length * 7;
+      const routeSummary = JSON.stringify({
+        store_hub: 'OFS Downtown San Jose Hub',
+        stops_count: selectedOrders.length,
+        addresses: selectedOrders.map(o => o.delivery_address)
+      });
+
+      // Insert Deliveries record
+      const [delivRes] = await conn.query(`
+        INSERT INTO Deliveries (
+          delivery_status, route_information, total_weight, order_count,
+          estimated_duration, total_distance, departure_time
+        ) VALUES ('Out for Delivery', ?, ?, ?, ?, ?, NOW())
+      `, [routeSummary, tripWeight, selectedOrders.length, estimatedDuration, estimatedDistance]);
+      const deliveryId = delivRes.insertId;
+
+      // Insert DeliveryOrders & update Orders status
+      for (let i = 0; i < selectedOrders.length; i++) {
+        const order = selectedOrders[i];
+        const stopSeq = i + 1;
+        const estMinutes = (i + 1) * 7;
+
+        await conn.query(`
+          INSERT INTO DeliveryOrders (delivery_id, order_id, stop_sequence, estimated_arrival)
+          VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))
+        `, [deliveryId, order.order_id, stopSeq, estMinutes]);
+
+        await conn.query(`
+          UPDATE Orders SET status = 'Out for Delivery' WHERE order_id = ?
+        `, [order.order_id]);
+
+        await conn.query(`
+          INSERT INTO Notifications (user_id, order_id, message)
+          VALUES (?, ?, ?)
+        `, [order.user_id, order.order_id, `Order #${order.order_id} is out for delivery with our autonomous robot (Stop #${stopSeq})!`]);
+      }
+
+      await conn.commit();
+
+      res.status(201).json({
+        message: 'Robot delivery trip created and dispatched.',
+        delivery_id: deliveryId,
+        order_count: selectedOrders.length,
+        total_weight: tripWeight,
+        estimated_duration_mins: estimatedDuration,
+        total_distance_miles: estimatedDistance,
+        orders: selectedOrders.map((o, idx) => ({
+          order_id: o.order_id,
+          stop_sequence: idx + 1,
+          weight: o.total_weight,
+          address: o.delivery_address
+        }))
+      });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error('Batch delivery error:', err);
+    res.status(500).json({ error: 'Failed to create delivery trip.' });
+  }
+});
+
+// GET /deliveries (Role: Employee, Manager)
+router.get('/deliveries', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
+  try {
+    const [deliveries] = await pool.query(`
+      SELECT d.*, COUNT(do.order_id) AS active_orders_count
+      FROM Deliveries AS d
+      LEFT JOIN DeliveryOrders AS do ON d.delivery_id = do.delivery_id
+      GROUP BY d.delivery_id
+      ORDER BY d.created_at DESC
+    `);
+    res.json(deliveries);
+  } catch (err) {
+    console.error('Error fetching deliveries:', err);
+    res.status(500).json({ error: 'Could not load deliveries.' });
+  }
+});
+
+// GET /deliveries/:id (Role: Customer [if their order is in trip], Employee, Manager)
+router.get('/deliveries/:id', loginVerification, async (req, res) => {
+  try {
+    const deliveryId = Number(req.params.id);
+    const user = req.session.user;
+
+    const [delivRows] = await pool.query('SELECT * FROM Deliveries WHERE delivery_id = ?', [deliveryId]);
+    if (delivRows.length === 0) {
+      return res.status(404).json({ error: 'Delivery trip not found.' });
+    }
+
+    const [orderRows] = await pool.query(`
+      SELECT do.stop_sequence, do.estimated_arrival,
+             o.order_id, o.user_id, o.total_weight, o.delivery_address, o.status,
+             u.name AS customer_name
+      FROM DeliveryOrders AS do
+      JOIN Orders AS o ON do.order_id = o.order_id
+      JOIN Users AS u ON o.user_id = u.user_id
+      WHERE do.delivery_id = ?
+      ORDER BY do.stop_sequence ASC
+    `, [deliveryId]);
+
+    // Customer can only view if one of their orders is in this trip
+    if (user.role === 'customer') {
+      const ownsOrder = orderRows.some(o => o.user_id === user.user_id);
+      if (!ownsOrder) {
+        return res.status(403).json({ error: 'Not allowed to view this delivery trip.' });
+      }
+    }
+
+    res.json({
+      ...delivRows[0],
+      orders: orderRows
+    });
+  } catch (err) {
+    console.error('Error fetching delivery:', err);
+    res.status(500).json({ error: 'Could not load delivery information.' });
+  }
+});
+
+// PUT /deliveries/:id/complete (Role: Employee, Manager)
+// Marks trip as Completed (or Failed) and updates all associated orders to Delivered (or Failed)
+router.put('/deliveries/:id/complete', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
+  const deliveryId = Number(req.params.id);
+  const { outcome } = req.body; // 'Completed' or 'Failed'
+
+  const deliveryStatus = outcome === 'Failed' ? 'Failed' : 'Completed';
+  const orderStatus = outcome === 'Failed' ? 'Failed' : 'Delivered';
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [deliv] = await conn.query('SELECT delivery_status FROM Deliveries WHERE delivery_id = ?', [deliveryId]);
+    if (deliv.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Delivery trip not found.' });
+    }
+
+    await conn.query('UPDATE Deliveries SET delivery_status = ? WHERE delivery_id = ?', [deliveryStatus, deliveryId]);
+
+    const [orders] = await conn.query(`
+      SELECT o.order_id, o.user_id
+      FROM DeliveryOrders AS do
+      JOIN Orders AS o ON do.order_id = o.order_id
+      WHERE do.delivery_id = ?
+    `, [deliveryId]);
+
+    for (const order of orders) {
+      await conn.query('UPDATE Orders SET status = ? WHERE order_id = ?', [orderStatus, order.order_id]);
+      const msg = orderStatus === 'Delivered'
+        ? `Order #${order.order_id} has been delivered by our robot!`
+        : `Order #${order.order_id} delivery could not be completed. An employee will follow up.`;
+      await conn.query('INSERT INTO Notifications (user_id, order_id, message) VALUES (?, ?, ?)', [
+        order.user_id, order.order_id, msg
+      ]);
+    }
+
+    await conn.commit();
+    res.json({
+      message: `Delivery trip marked as ${deliveryStatus}.`,
+      delivery_id: deliveryId,
+      delivery_status: deliveryStatus,
+      orders_status: orderStatus,
+      updated_orders: orders.map(o => o.order_id)
+    });
+  } catch (err) {
+    await conn.rollback();
+    console.error('Complete delivery error:', err);
+    res.status(500).json({ error: 'Could not update delivery trip.' });
+  } finally {
+    conn.release();
+  }
+});
+
+module.exports = router;
