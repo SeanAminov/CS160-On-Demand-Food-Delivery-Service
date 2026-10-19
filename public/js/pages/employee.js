@@ -66,9 +66,28 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
           </p>
         </div>
         <div>
-          <button id="dispatch-trip-btn" class="button primary" ${stagedOrders.length === 0 ? 'disabled' : ''} style="padding: 12px 20px;">
-            🚀 Dispatch Robot Trip (${stagedOrders.length} staged)
-          </button>
+            ${
+              stagedOrders.length > 0
+              ? `
+                <a
+                  class="button primary"
+                  href="#/employee-shipping"
+                  style="padding: 12px 20px;"
+                >
+                  Review and Assign Robot
+                  (${stagedOrders.length} staged)
+                </a>
+              `
+              : `
+                <button
+                  class="button primary"
+                  disabled
+                  style="padding: 12px 20px;"
+                >
+                  No Staged Orders
+                </button>
+              `
+            }
         </div>
       </div>
 
@@ -133,15 +152,12 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
             <td style="font-size: 13px;">${order.delivery_address}</td>
             <td>
               <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                ${order.status === 'Pending' ? `
-                  <button class="button small primary transition-btn" data-id="${order.order_id}" data-status="Preparing">
-                    Start Preparing
-                  </button>
-                ` : `
-                  <button class="button small primary transition-btn" data-id="${order.order_id}" data-status="Staged" style="background: #6d28d9; border-color: #6d28d9;">
-                    Mark Staged
-                  </button>
-                `}
+                <a
+                  class="button small primary"
+                  href="#/employee-packing?id=${order.order_id}"
+                >
+                  Open Packing
+                </a>
                 <button class="button small cancel-btn" data-id="${order.order_id}" style="color: #b91c1c; border-color: #b91c1c;">
                   Cancel
                 </button>
