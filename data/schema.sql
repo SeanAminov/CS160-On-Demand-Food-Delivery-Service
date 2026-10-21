@@ -325,7 +325,8 @@ SET image_url = CASE name
     WHEN 'Frozen Mixed Vegetables' THEN 'https://d2lnr5mha7bycj.cloudfront.net/product-image/file/large_ccdf2909-c870-48af-913d-c3ca75b7c7c2.jpg'
     ELSE image_url
 END
-WHERE image_url IS NULL;
+WHERE image_url IS NULL
+    OR name IN ('Tomato Pasta Sauce', 'Bottled Water', 'Frozen Mixed Vegetables');
 
 SELECT
     p.product_id,
