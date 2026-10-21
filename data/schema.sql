@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS Users (
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('customer', 'employee', 'manager') NOT NULL DEFAULT 'customer',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    stripe_customer_id VARCHAR(255) UNIQUE NULL
+    stripe_customer_id VARCHAR(255) UNIQUE NULL,
+    address VARCHAR(255) NULL
 );
 
 CREATE TABLE IF NOT EXISTS Products (
@@ -76,7 +77,8 @@ CREATE TABLE IF NOT EXISTS Deliveries (
     estimated_duration INT NULL,
     total_distance DECIMAL(10,2) NULL,
     departure_time DATETIME NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    robot VARCHAR(20) NULL
 );
 
 CREATE TABLE IF NOT EXISTS Transactions (

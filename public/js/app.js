@@ -11,6 +11,7 @@ import manager from './pages/manager.js';
 import managerInventory from './pages/manager-inventory.js';
 import managerOrders from './pages/manager-orders.js';
 import register from './pages/register.js';
+import account from './pages/account.js';
 import { getUser } from './user.js';
 
 
@@ -26,6 +27,7 @@ const pages = {
   '/employee': employee,
   '/manager': manager,
   '/register': register,
+  '/account': account,
   '/employee-packing': employeePacking,
   '/employee-shipping': employeeShipping,
   '/manager-inventory': managerInventory,
@@ -69,12 +71,14 @@ async function loginUpdate(){
   const welcome = document.getElementById('welcome');
   const login = document.getElementById('login');
   const empLink = document.getElementById('emp-link');
+  const accountLink = document.getElementById('account-link');
   try{
     const response = await fetch('/profile');
     if (!response.ok){
       loggedIn = false;
       welcome.hidden = true;
       if (empLink) empLink.hidden = true;
+      if (accountLink) accountLink.hidden = true;
       login.textContent = 'Log In';
       return;
     }
@@ -83,12 +87,14 @@ async function loginUpdate(){
     welcome.textContent =  `Welcome ${user.role}: ${user.name}`;
     welcome.hidden = false;
     if (empLink) empLink.hidden = !(user.role === 'employee' || user.role === 'manager');
+    if (accountLink) accountLink.hidden = false;
     login.textContent = 'Log Out';
   }
   catch (error){
     console.error('Can not access info', error);
     welcome.hidden = true;
     if (empLink) empLink.hidden = true;
+    if (accountLink) accountLink.hidden = true;
   }
 }
 document.getElementById('login').addEventListener('click', async (e) =>{

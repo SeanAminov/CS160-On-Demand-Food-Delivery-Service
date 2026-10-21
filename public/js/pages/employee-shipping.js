@@ -32,17 +32,54 @@ export default {
     `;
 
     try {
-      const response = await fetch('/orders');
+      const [response, tripsResponse] = await Promise.all([
+        fetch('/orders'),
+        fetch('/deliveries'),
+      ]);
 
-      if (!response.ok) {
+      if (!response.ok || !tripsResponse.ok) {
         throw new Error('Could not load staged orders.');
       }
 
       const orders = await response.json();
+      const trips = await tripsResponse.json();
 
-      const stagedOrders = orders.filter(
-        (order) => order.status === 'Staged'
-      );
+      // Oldest first, since those customers have waited the longest
+      const stagedOrders = orders
+        .filter((order) => order.status === 'Staged')
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+      // Start with the oldest orders that fit on one robot already checked,
+      // the same way Section 6 of our Part 2 document picks a trip.
+      // The employee can still change which ones go.
+      const suggested = [];
+      let suggestedWeight = 0;
+
+      for (const order of stagedOrders) {
+        const weight = Number(order.total_weight);
+
+        if (suggested.length < 10 && Number((suggestedWeight + weight).toFixed(2)) <= 200) {
+          suggested.push(order.order_id);
+          suggestedWeight += weight;
+        }
+      }
+
+      // A robot that is already out on a trip can't be picked again
+      const busyRobots = {};
+
+      for (const trip of trips) {
+        if (trip.delivery_status === 'Out for Delivery' && trip.robot) {
+          busyRobots[trip.robot] = trip.delivery_id;
+        }
+      }
+
+      const robotOptions = ['Robot 1', 'Robot 2', 'Robot 3']
+        .map((robot) =>
+          busyRobots[robot]
+            ? `<option value="${robot}" disabled>${robot} (out on trip #${busyRobots[robot]})</option>`
+            : `<option value="${robot}">${robot}</option>`
+        )
+        .join('');
 
       const content = app.querySelector('.card');
 
@@ -68,7 +105,6 @@ export default {
             Selected:
             <span id="selected-count">0</span>
             <span id="selected-label">orders</span>
-            orders
           </strong>
 
           <strong>
@@ -88,6 +124,7 @@ export default {
                     class="shipping-order-checkbox"
                     data-id="${order.order_id}"
                     data-weight="${order.total_weight}"
+                    ${suggested.includes(order.order_id) ? 'checked' : ''}
                   />
 
                   <span>
@@ -122,15 +159,7 @@ export default {
             <option value="">
               Select a robot
             </option>
-            <option value="Robot 1">
-              Robot 1
-            </option>
-            <option value="Robot 2">
-              Robot 2
-            </option>
-            <option value="Robot 3">
-              Robot 3
-            </option>
+            ${robotOptions}
           </select>
 
           <button
@@ -138,7 +167,7 @@ export default {
             class="button primary"
             disabled
           >
-            Prepare Robot Dispatch
+            Dispatch Robot
           </button>
 
           <p id="shipping-message" class="shipping-message"></p>
@@ -185,7 +214,7 @@ export default {
             'A robot cannot carry more than 10 orders.';
           message.className = 'shipping-message error';
           dispatchButton.disabled = true;
-        } else if (weight > 200) {
+        } else if (Number(weight.toFixed(2)) > 200) {
           message.textContent =
             'A robot cannot carry more than 200 pounds.';
           message.className = 'shipping-message error';
@@ -202,14 +231,59 @@ export default {
 
       robotSelect.addEventListener('change', updateSummary);
 
-      dispatchButton.addEventListener('click', () => {
-        const selectedRobot = robotSelect.value;
+      // Show the count and weight for the orders that start checked
+      updateSummary();
 
-        message.textContent =
-          `${selectedRobot} has been assigned to this trip. ` +
-          'Database dispatch will be connected next.';
+      dispatchButton.addEventListener('click', async () => {
+        const orderIds = [
+          ...app.querySelectorAll(
+            '.shipping-order-checkbox:checked'
+          ),
+        ].map((checkbox) => Number(checkbox.dataset.id));
 
-        message.className = 'shipping-message success';
+        dispatchButton.disabled = true;
+        message.textContent = '';
+
+        try {
+          const dispatchResponse = await fetch('/deliveries/batches', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              robot: robotSelect.value,
+              orderIds,
+            }),
+          });
+
+          const trip = await dispatchResponse.json();
+
+          if (!dispatchResponse.ok) {
+            throw new Error(
+              trip.error || 'Could not dispatch the robot.'
+            );
+          }
+
+          content.innerHTML = `
+            <h2>Robot Dispatched</h2>
+
+            <p>
+              ${trip.robot} is out on trip
+              <strong>#${trip.delivery_id}</strong>
+              with ${trip.order_count}
+              order${trip.order_count === 1 ? '' : 's'}
+              (${Number(trip.total_weight).toFixed(2)} lb).
+            </p>
+
+            <a class="button primary" href="#/employee">
+              Return to Dashboard
+            </a>
+          `;
+        } catch (error) {
+          message.textContent = error.message;
+          message.className = 'shipping-message error';
+          dispatchButton.disabled = false;
+        }
       });
     } catch (error) {
       app.innerHTML = `

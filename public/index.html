@@ -6,6 +6,8 @@
   <title>OFS Organic Food Delivery</title>
   <link rel="stylesheet" href="css/style.css">
   <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+  <!-- Stripe's card box for checkout. Stripe asks for this to load from their site. -->
+  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
   <header>
@@ -16,6 +18,7 @@
       <a href="#/cart">Cart</a>
       <a href="#/orders">My Orders</a>
       <a id="emp-link" href="#/employee" hidden>Employee</a>
+      <a id="account-link" href="#/account" hidden>Account</a>
       <a id ="login" href="#/login">Log In</a>
     </nav>
   </header>

@@ -119,6 +119,53 @@ a.card:hover {
   min-height: 1em;
 }
 
+.message.success {
+  color: #2f6f3e;
+}
+
+.address-fields label {
+  display: block;
+  font-weight: bold;
+  margin: 12px 0 6px;
+}
+
+.address-fields input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #2f6f3e;
+  border-radius: 6px;
+}
+
+.address-row {
+  display: flex;
+  gap: 10px;
+}
+
+.address-row > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.address-row > .address-city {
+  flex: 2;
+}
+
+/* On phones, City gets its own line and State and ZIP share the next one */
+@media (max-width: 500px) {
+  .address-row {
+    flex-wrap: wrap;
+  }
+
+  .address-row > .address-city {
+    flex-basis: 100%;
+  }
+}
+
+.address-note {
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
 table.cart {
   width: 100%;
   border-collapse: collapse;
@@ -580,6 +627,12 @@ table.cart td {
 }
 
 /* Order manage styles */
+
+/* The order table needs more room than the other pages,
+   so the page gets wider while it's showing */
+main:has(.order-management-card) {
+  max-width: 1300px;
+}
 
 .order-management-card {
   margin-top: 28px;

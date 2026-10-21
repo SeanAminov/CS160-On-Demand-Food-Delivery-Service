@@ -161,6 +161,24 @@ async function renderPackingOrder(app, orderId) {
 
     const order = await response.json();
 
+    // Only orders that haven't been staged yet can be packed
+    if (order.status !== 'Pending' && order.status !== 'Preparing') {
+      app.innerHTML = `
+        <section class="hero">
+          <h1>Order #${order.order_id}</h1>
+
+          <p>
+            This order is already ${order.status}, so there is nothing left to pack.
+          </p>
+
+          <a class="button primary" href="#/employee-packing">
+            Back to Orders to Pack
+          </a>
+        </section>
+      `;
+      return;
+    }
+
     const confirmedQuantities = {};
 
     order.items.forEach((item) => {

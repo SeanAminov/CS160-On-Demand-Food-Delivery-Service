@@ -1,5 +1,6 @@
 import { cartRequest, money } from '../cart-api.js';
 import { getUser } from '../user.js';
+import { addressFields, readAddress } from '../address-form.js';
 
 export default {
   title: 'Checkout',
@@ -24,14 +25,27 @@ export default {
         `;
         return;
       }
-      renderCheckout(app, cart);
+
+      // Fill in the address saved on their account, if they have one
+      let savedAddress = null;
+      try {
+        const data = await cartRequest('GET', '/profile/address');
+        savedAddress = data.parts;
+      } catch {
+        // No saved address, so the boxes just start empty
+      }
+
+      // The publishable key lets the page show Stripe's card box
+      const { publishableKey } = await cartRequest('GET', '/stripe-key');
+
+      renderCheckout(app, cart, savedAddress, publishableKey);
     } catch (err) {
       app.innerHTML = `<h1>Checkout</h1><p class="message">${err.message}</p>`;
     }
   },
 };
 
-function renderCheckout(app, cart, errorMessage = '') {
+function renderCheckout(app, cart, savedAddress, publishableKey, errorMessage = '') {
   let rows = '';
   for (const item of cart.items) {
     rows += `
@@ -51,7 +65,6 @@ function renderCheckout(app, cart, errorMessage = '') {
 
   app.innerHTML = `
     <h1>Checkout</h1>
-    ${errorMessage ? `<p class="message" id="checkout-error">${errorMessage}</p>` : '<p class="message" id="checkout-error"></p>'}
 
     <div style="display: flex; flex-wrap: wrap; gap: 24px;">
       <!-- Order Summary Column -->
@@ -77,52 +90,31 @@ function renderCheckout(app, cart, errorMessage = '') {
       <div style="flex: 1; min-width: 320px;">
         <h2>Delivery Address</h2>
         <div class="card" style="margin-bottom: 20px;">
-          <p class="muted" style="margin-top: 0; font-size: 14px;">
-            We deliver exclusively within <b>Downtown San Jose</b> (ZIPs 95110, 95112, 95113, 95116, 95192).
-          </p>
-          <div style="margin-bottom: 12px;">
-            <label for="address-input" style="display: block; font-weight: bold; margin-bottom: 6px;">Street Address</label>
-            <input id="address-input" type="text" style="width: 100%; padding: 10px; border: 1px solid #2f6f3e; border-radius: 6px;"
-              placeholder="e.g. 1 Washington Sq, San Jose, CA 95192" value="1 Washington Sq, San Jose, CA 95192">
-          </div>
+          ${addressFields(savedAddress)}
+          <label style="display: flex; align-items: center; cursor: pointer; gap: 8px; font-size: 14px; margin-top: 12px;">
+            <input id="save-address" type="checkbox" ${savedAddress ? '' : 'checked'}>
+            <span>Save this address to my account</span>
+          </label>
         </div>
 
         <h2>Payment Information</h2>
         <div class="card" style="margin-bottom: 20px;">
           <p class="muted" style="margin-top: 0; font-size: 13px;">
-            Stripe Test Mode Simulation (card details are processed securely and never saved unhashed).
+            Card details go straight to Stripe and never touch our server. This is Stripe test mode, so no real money is charged.
           </p>
-          <div style="margin-bottom: 10px;">
-            <label style="display: block; font-weight: bold; margin-bottom: 4px;">Cardholder Name</label>
-            <input id="card-name" type="text" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;"
-              placeholder="Full Name" value="Test Customer">
-          </div>
-          <div style="margin-bottom: 10px;">
-            <label style="display: block; font-weight: bold; margin-bottom: 4px;">Card Number</label>
-            <input id="card-number" type="text" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;"
-              placeholder="4242 •••• •••• 4242" value="4242 4242 4242 4242">
-          </div>
-          <div style="display: flex; gap: 10px; margin-bottom: 14px;">
-            <div style="flex: 1;">
-              <label style="display: block; font-weight: bold; margin-bottom: 4px;">Expires</label>
-              <input type="text" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;"
-                placeholder="MM/YY" value="12/28">
-            </div>
-            <div style="flex: 1;">
-              <label style="display: block; font-weight: bold; margin-bottom: 4px;">CVC</label>
-              <input type="text" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;"
-                placeholder="CVC" value="123">
-            </div>
-          </div>
+          <label style="display: block; font-weight: bold; margin-bottom: 6px;">Card</label>
+          <div id="card-element" style="padding: 12px; border: 1px solid #ccc; border-radius: 6px; background: white;"></div>
+          <p class="message" id="card-error" style="font-size: 14px;"></p>
 
-          <div style="background: #f0f7f1; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;">
-            <label style="display: flex; align-items: center; cursor: pointer; gap: 8px;">
-              <input id="test-decline" type="checkbox">
-              <span><b>Test Scenario:</b> Simulate card decline (tests error handling & cart preservation)</span>
-            </label>
+          <div style="background: #f0f7f1; padding: 10px; border-radius: 6px; font-size: 13px; line-height: 1.6;">
+            <b>Test card (Stripe test mode)</b><br>
+            Card number: 4242 4242 4242 4242, or 4000 0000 0000 0002 to test a declined card<br>
+            Expiration: any month and year in the future, like 12 / 34<br>
+            CVC: any 3 digits, like 123
           </div>
         </div>
 
+        <p class="message" id="checkout-error">${errorMessage}</p>
         <div class="buttons">
           <button id="place-order-btn" class="button primary" style="width: 100%; padding: 12px; font-size: 17px;">
             Place Order (${money(cart.total)})
@@ -134,14 +126,33 @@ function renderCheckout(app, cart, errorMessage = '') {
   `;
 
   const placeBtn = app.querySelector('#place-order-btn');
-  placeBtn.addEventListener('click', async () => {
-    const address = app.querySelector('#address-input').value.trim();
-    const cardNumber = app.querySelector('#card-number').value.trim();
-    const simulateDecline = app.querySelector('#test-decline').checked;
-    const errorEl = app.querySelector('#checkout-error');
+  const errorEl = app.querySelector('#checkout-error');
 
-    if (!address) {
-      errorEl.textContent = 'Please provide a valid delivery address.';
+  // Stripe's card box lives on Stripe's own servers, so the card number typed
+  // into it goes straight to Stripe and our code never sees it
+  if (!publishableKey || !window.Stripe) {
+    errorEl.textContent = 'Payments are not set up on this computer yet. Add the Stripe keys to .env and restart the server.';
+    placeBtn.disabled = true;
+    return;
+  }
+  const stripe = window.Stripe(publishableKey);
+  // The delivery address already has a ZIP box, so the card box doesn't ask for another one
+  const card = stripe.elements().create('card', { hidePostalCode: true, style: { base: { fontSize: '16px' } } });
+  card.mount('#card-element');
+
+  // Stripe checks the card while it's typed, so show what's wrong right away,
+  // like an expiration date that's already passed
+  const cardError = app.querySelector('#card-error');
+  card.on('change', (event) => {
+    cardError.textContent = event.error ? event.error.message : '';
+  });
+
+  placeBtn.addEventListener('click', async () => {
+    const address = readAddress(app);
+    const saveAddress = app.querySelector('#save-address').checked;
+
+    if (!address.street || !address.zip) {
+      errorEl.textContent = 'Please fill in your street address and ZIP code.';
       return;
     }
 
@@ -150,11 +161,24 @@ function renderCheckout(app, cart, errorMessage = '') {
     errorEl.textContent = '';
 
     try {
+      // Stripe turns the card into a payment method ID, and only that ID comes to our server
+      const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card });
+      if (error) {
+        throw new Error(error.message);
+      }
+
       const result = await cartRequest('POST', '/checkout', {
         delivery_address: address,
-        card_number: cardNumber,
-        simulate_decline: simulateDecline
+        payment_method_id: paymentMethod.id
       });
+
+      if (saveAddress) {
+        try {
+          await cartRequest('PUT', '/profile/address', address);
+        } catch {
+          // The order still went through, so there's no need to show an error for this
+        }
+      }
 
       renderConfirmation(app, result);
     } catch (err) {

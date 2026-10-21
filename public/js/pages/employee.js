@@ -109,7 +109,7 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
           <div class="card" style="margin-bottom: 14px; border-left: 4px solid #047857;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
               <div>
-                <b>Trip #${t.delivery_id}</b> &bull; Status: <span style="color: #047857; font-weight: bold;">Out for Delivery</span>
+                <b>Trip #${t.delivery_id}</b>${t.robot ? ` &bull; ${t.robot}` : ''} &bull; Status: <span style="color: #047857; font-weight: bold;">Out for Delivery</span>
                 <span class="muted" style="margin-left: 10px; font-size: 13px;">Departed: ${new Date(t.departure_time || t.created_at).toLocaleTimeString()}</span>
               </div>
               <div class="buttons" style="margin-top: 0;">
@@ -169,43 +169,9 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
     `}
   `;
 
-  // Attach event handlers
-  const dispatchBtn = app.querySelector('#dispatch-trip-btn');
-  if (dispatchBtn) {
-    dispatchBtn.addEventListener('click', async () => {
-      dispatchBtn.disabled = true;
-      dispatchBtn.textContent = 'Building Trip & Optimizing Route...';
-      try {
-        const res = await fetch('/deliveries/batches', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to dispatch trip.');
-        await renderDashboard(app, `Trip #${data.delivery_id} dispatched! Loaded ${data.order_count} orders (${data.total_weight} lbs).`);
-      } catch (err) {
-        await renderDashboard(app, err.message, true);
-      }
-    });
-  }
-
-  for (const btn of app.querySelectorAll('.transition-btn')) {
-    btn.addEventListener('click', async () => {
-      const orderId = btn.dataset.id;
-      const targetStatus = btn.dataset.status;
-      btn.disabled = true;
-      try {
-        const res = await fetch(`/orders/${orderId}/status`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: targetStatus })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update order status.');
-        await renderDashboard(app, `Order #${orderId} moved to ${targetStatus}.`);
-      } catch (err) {
-        await renderDashboard(app, err.message, true);
-      }
-    });
-  }
-
+  // Attach event handlers.
+  // Dispatching a trip happens on the Waiting to Ship page, and moving an order
+  // to Preparing and Staged happens on the packing page.
   for (const btn of app.querySelectorAll('.cancel-btn')) {
     btn.addEventListener('click', async () => {
       const orderId = btn.dataset.id;
