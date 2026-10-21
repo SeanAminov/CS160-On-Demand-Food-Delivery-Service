@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS Products (
     name VARCHAR(150) NOT NULL,
     category VARCHAR(100) NOT NULL DEFAULT 'Other',
     description TEXT NULL,
+    image_url VARCHAR(500) NULL,
     price DECIMAL(10,2) NOT NULL,
     weight DECIMAL(8,2) NOT NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE
@@ -32,6 +33,24 @@ CREATE TABLE IF NOT EXISTS Inventory (
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
         ON DELETE CASCADE
 );
+
+-- Add the image column when upgrading an existing database. The conditional
+-- statement keeps this script safe to run repeatedly in MySQL Workbench.
+SET @image_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'Products'
+      AND COLUMN_NAME = 'image_url'
+);
+SET @add_image_column_sql = IF(
+    @image_column_exists = 0,
+    'ALTER TABLE Products ADD COLUMN image_url VARCHAR(500) NULL AFTER description',
+    'SELECT 1'
+);
+PREPARE add_image_column_statement FROM @add_image_column_sql;
+EXECUTE add_image_column_statement;
+DEALLOCATE PREPARE add_image_column_statement;
 
 CREATE TABLE IF NOT EXISTS Orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -283,11 +302,37 @@ WHERE i.product_id IS NULL
       'Frozen Mixed Vegetables'
   );
 
+-- Product images are stored as URLs so the catalog can display them without
+-- adding binary files to the database. These updates also populate images for
+-- products that were already seeded before image support was added.
+UPDATE Products
+SET image_url = CASE name
+    WHEN 'Organic Fuji Apples' THEN 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Bananas' THEN 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Whole Milk' THEN 'https://images.unsplash.com/photo-1563636619-e9143da7973b?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Large Brown Eggs' THEN 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Cheddar Cheese' THEN 'https://images.unsplash.com/photo-1618164436241-4473940d1f5c?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Chicken Breast' THEN 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Ground Beef' THEN 'https://images.unsplash.com/photo-1588347818036-558601350947?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Brown Rice' THEN 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Spaghetti Pasta' THEN 'https://images.unsplash.com/photo-1551892374-ecf8754cf8b0?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Tomato Pasta Sauce' THEN 'https://images.unsplash.com/photo-1472476442910-44a20e994a6c?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Potato Chips' THEN 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Granola Bars' THEN 'https://images.unsplash.com/photo-1598373182133-52452f7691ef?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Orange Juice' THEN 'https://images.unsplash.com/photo-1600271886742-f049cd451bba?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Bottled Water' THEN 'https://images.unsplash.com/photo-1564419320461-6870880221ad?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Frozen Cheese Pizza' THEN 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Frozen Mixed Vegetables' THEN 'https://images.unsplash.com/photo-1587334206596-c0f9f7dccbe6?auto=format&fit=crop&w=800&q=80'
+    ELSE image_url
+END
+WHERE image_url IS NULL;
+
 SELECT
     p.product_id,
     p.name,
     p.category,
     p.description,
+    p.image_url,
     p.price,
     p.weight,
     i.quantity,
