@@ -29,6 +29,7 @@ export default {
         const name = formData.get('name').trim();
         const email = formData.get('email').trim();
         const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const nameRegex = /^[\p{L} .'-]+$/u;
         const password = formData.get('password');
         const confirmPassword = formData.get('confirmPassword');
         if (!name || !email || !password || !confirmPassword){
@@ -38,7 +39,11 @@ export default {
         if (name.length > 100){
           error.textContent = 'Name must be 100 characters or less.';
           return;
-        } 
+        }
+        if (!nameRegex.test(name)){
+          error.textContent = 'Name can only use letters, spaces, periods, apostrophes, and hyphens.';
+          return;
+        }
         if (email.length > 255){
           error.textContent = 'Email must be 255 characters or less.';
           return;

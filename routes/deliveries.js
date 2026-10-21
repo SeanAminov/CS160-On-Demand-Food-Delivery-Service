@@ -5,116 +5,155 @@ const router = express.Router();
 
 const MAX_TRIP_ORDERS = 10;
 const MAX_TRIP_WEIGHT = 200.0;
+// The robots an employee can pick on the Waiting to Ship page
+const ROBOTS = ['Robot 1', 'Robot 2', 'Robot 3'];
 
 // POST /deliveries/batches (Role: Employee, Manager)
-// Groups staged orders into a robot delivery trip within 10 orders & 200 lbs limits
+// Groups staged orders into a robot delivery trip within 10 orders & 200 lbs limits.
+// The Waiting to Ship page sends the orders the employee checked and the robot they picked.
+// If no orders are sent, the oldest staged orders that fit are picked automatically.
 router.post('/deliveries/batches', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
+  const { robot, orderIds } = req.body || {};
+
+  if (!ROBOTS.includes(robot)) {
+    return res.status(400).json({ error: 'Please pick a robot for this trip.' });
+  }
+  if (orderIds !== undefined && (!Array.isArray(orderIds) || orderIds.length === 0 || !orderIds.every(Number.isInteger))) {
+    return res.status(400).json({ error: 'Please pick at least one order.' });
+  }
+
+  const conn = await pool.getConnection();
   try {
-    // 1. Fetch staged orders, oldest first
-    const [stagedOrders] = await pool.query(`
+    await conn.beginTransaction();
+
+    // A robot can only be on one trip at a time.
+    // FOR UPDATE makes a second dispatch wait until this one is finished.
+    const [busyTrips] = await conn.query(`
+      SELECT delivery_id
+      FROM Deliveries
+      WHERE robot = ? AND delivery_status = 'Out for Delivery'
+      FOR UPDATE
+    `, [robot]);
+    if (busyTrips.length > 0) {
+      await conn.rollback();
+      return res.status(409).json({ error: `${robot} is already out on trip #${busyTrips[0].delivery_id}.` });
+    }
+
+    // 1. Fetch staged orders, oldest first.
+    // FOR UPDATE stops two employees from sending the same order out twice.
+    const [stagedOrders] = await conn.query(`
       SELECT order_id, user_id, total_weight, total_price, delivery_address, delivery_lat, delivery_lng, created_at
       FROM Orders
       WHERE status = 'Staged'
       ORDER BY created_at ASC
+      FOR UPDATE
     `);
 
-    if (stagedOrders.length === 0) {
-      return res.status(400).json({ error: 'No staged orders available to form a delivery trip.' });
-    }
-
-    // 2. Greedy knapsack selection per Section 6 of Part 2 spec:
-    // Take oldest orders first; if an order would push the trip past 200 lbs, skip it and continue
-    // checking subsequent orders since a smaller order may still fit. Stop when 10 orders reached.
-    const selectedOrders = [];
+    let selectedOrders = [];
     let tripWeight = 0;
 
-    for (const order of stagedOrders) {
-      if (selectedOrders.length >= MAX_TRIP_ORDERS) {
-        break;
+    if (orderIds) {
+      // 2a. The employee picked the orders, so make sure each one is still staged and they all fit
+      selectedOrders = stagedOrders.filter(order => orderIds.includes(order.order_id));
+      if (selectedOrders.length !== new Set(orderIds).size) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Some of those orders are not waiting to ship anymore. Reload the page and try again.' });
       }
-      const orderWeight = Number(order.total_weight);
-      if (Number((tripWeight + orderWeight).toFixed(2)) <= MAX_TRIP_WEIGHT) {
-        selectedOrders.push(order);
-        tripWeight = Number((tripWeight + orderWeight).toFixed(2));
+      for (const order of selectedOrders) {
+        tripWeight = Number((tripWeight + Number(order.total_weight)).toFixed(2));
       }
-      // If order would push past 200 lbs, skip it and keep checking
+      if (selectedOrders.length > MAX_TRIP_ORDERS || tripWeight > MAX_TRIP_WEIGHT) {
+        await conn.rollback();
+        return res.status(400).json({ error: `A robot can carry up to ${MAX_TRIP_ORDERS} orders and ${MAX_TRIP_WEIGHT} lbs.` });
+      }
+    } else {
+      // 2b. Greedy knapsack selection per Section 6 of Part 2 spec:
+      // Take oldest orders first; if an order would push the trip past 200 lbs, skip it and continue
+      // checking subsequent orders since a smaller order may still fit. Stop when 10 orders reached.
+      for (const order of stagedOrders) {
+        if (selectedOrders.length >= MAX_TRIP_ORDERS) {
+          break;
+        }
+        const orderWeight = Number(order.total_weight);
+        if (Number((tripWeight + orderWeight).toFixed(2)) <= MAX_TRIP_WEIGHT) {
+          selectedOrders.push(order);
+          tripWeight = Number((tripWeight + orderWeight).toFixed(2));
+        }
+        // If order would push past 200 lbs, skip it and keep checking
+      }
     }
 
     if (selectedOrders.length === 0) {
-      return res.status(400).json({
-        error: `Could not form a trip. Staged orders individually exceed vehicle limit of ${MAX_TRIP_WEIGHT} lbs.`
-      });
-    }
-
-    // 3. Database transaction to create delivery trip and assign orders
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-
-      // Estimated metrics (approx. 0.7 miles and 5-7 minutes per stop in Downtown San Jose)
-      const estimatedDistance = Number((selectedOrders.length * 0.75).toFixed(2));
-      const estimatedDuration = selectedOrders.length * 7;
-      const routeSummary = JSON.stringify({
-        store_hub: 'OFS Downtown San Jose Hub',
-        stops_count: selectedOrders.length,
-        addresses: selectedOrders.map(o => o.delivery_address)
-      });
-
-      // Insert Deliveries record
-      const [delivRes] = await conn.query(`
-        INSERT INTO Deliveries (
-          delivery_status, route_information, total_weight, order_count,
-          estimated_duration, total_distance, departure_time
-        ) VALUES ('Out for Delivery', ?, ?, ?, ?, ?, NOW())
-      `, [routeSummary, tripWeight, selectedOrders.length, estimatedDuration, estimatedDistance]);
-      const deliveryId = delivRes.insertId;
-
-      // Insert DeliveryOrders & update Orders status
-      for (let i = 0; i < selectedOrders.length; i++) {
-        const order = selectedOrders[i];
-        const stopSeq = i + 1;
-        const estMinutes = (i + 1) * 7;
-
-        await conn.query(`
-          INSERT INTO DeliveryOrders (delivery_id, order_id, stop_sequence, estimated_arrival)
-          VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))
-        `, [deliveryId, order.order_id, stopSeq, estMinutes]);
-
-        await conn.query(`
-          UPDATE Orders SET status = 'Out for Delivery' WHERE order_id = ?
-        `, [order.order_id]);
-
-        await conn.query(`
-          INSERT INTO Notifications (user_id, order_id, message)
-          VALUES (?, ?, ?)
-        `, [order.user_id, order.order_id, `Order #${order.order_id} is out for delivery with our autonomous robot (Stop #${stopSeq})!`]);
-      }
-
-      await conn.commit();
-
-      res.status(201).json({
-        message: 'Robot delivery trip created and dispatched.',
-        delivery_id: deliveryId,
-        order_count: selectedOrders.length,
-        total_weight: tripWeight,
-        estimated_duration_mins: estimatedDuration,
-        total_distance_miles: estimatedDistance,
-        orders: selectedOrders.map((o, idx) => ({
-          order_id: o.order_id,
-          stop_sequence: idx + 1,
-          weight: o.total_weight,
-          address: o.delivery_address
-        }))
-      });
-    } catch (err) {
       await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
+      const error = stagedOrders.length === 0
+        ? 'No staged orders available to form a delivery trip.'
+        : `Could not form a trip. Staged orders individually exceed vehicle limit of ${MAX_TRIP_WEIGHT} lbs.`;
+      return res.status(400).json({ error });
     }
+
+    // 3. Create the delivery trip and assign orders
+    // Estimated metrics (approx. 0.7 miles and 5-7 minutes per stop in Downtown San Jose)
+    const estimatedDistance = Number((selectedOrders.length * 0.75).toFixed(2));
+    const estimatedDuration = selectedOrders.length * 7;
+    const routeSummary = JSON.stringify({
+      store_hub: 'OFS Downtown San Jose Hub',
+      stops_count: selectedOrders.length,
+      addresses: selectedOrders.map(o => o.delivery_address)
+    });
+
+    // Insert Deliveries record
+    const [delivRes] = await conn.query(`
+      INSERT INTO Deliveries (
+        delivery_status, robot, route_information, total_weight, order_count,
+        estimated_duration, total_distance, departure_time
+      ) VALUES ('Out for Delivery', ?, ?, ?, ?, ?, ?, NOW())
+    `, [robot, routeSummary, tripWeight, selectedOrders.length, estimatedDuration, estimatedDistance]);
+    const deliveryId = delivRes.insertId;
+
+    // Insert DeliveryOrders & update Orders status
+    for (let i = 0; i < selectedOrders.length; i++) {
+      const order = selectedOrders[i];
+      const stopSeq = i + 1;
+      const estMinutes = (i + 1) * 7;
+
+      await conn.query(`
+        INSERT INTO DeliveryOrders (delivery_id, order_id, stop_sequence, estimated_arrival)
+        VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))
+      `, [deliveryId, order.order_id, stopSeq, estMinutes]);
+
+      await conn.query(`
+        UPDATE Orders SET status = 'Out for Delivery' WHERE order_id = ?
+      `, [order.order_id]);
+
+      await conn.query(`
+        INSERT INTO Notifications (user_id, order_id, message)
+        VALUES (?, ?, ?)
+      `, [order.user_id, order.order_id, `Order #${order.order_id} is out for delivery with our autonomous robot (Stop #${stopSeq})!`]);
+    }
+
+    await conn.commit();
+
+    res.status(201).json({
+      message: 'Robot delivery trip created and dispatched.',
+      delivery_id: deliveryId,
+      robot,
+      order_count: selectedOrders.length,
+      total_weight: tripWeight,
+      estimated_duration_mins: estimatedDuration,
+      total_distance_miles: estimatedDistance,
+      orders: selectedOrders.map((o, idx) => ({
+        order_id: o.order_id,
+        stop_sequence: idx + 1,
+        weight: o.total_weight,
+        address: o.delivery_address
+      }))
+    });
   } catch (err) {
+    await conn.rollback();
     console.error('Batch delivery error:', err);
     res.status(500).json({ error: 'Failed to create delivery trip.' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -179,7 +218,11 @@ router.get('/deliveries/:id', loginVerification, async (req, res) => {
 // Marks trip as Completed (or Failed) and updates all associated orders to Delivered (or Failed)
 router.put('/deliveries/:id/complete', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
   const deliveryId = Number(req.params.id);
-  const { outcome } = req.body; // 'Completed' or 'Failed'
+  const { outcome } = req.body || {}; // 'Completed' or 'Failed'
+
+  if (outcome !== 'Completed' && outcome !== 'Failed') {
+    return res.status(400).json({ error: 'Outcome must be Completed or Failed.' });
+  }
 
   const deliveryStatus = outcome === 'Failed' ? 'Failed' : 'Completed';
   const orderStatus = outcome === 'Failed' ? 'Failed' : 'Delivered';
@@ -188,19 +231,26 @@ router.put('/deliveries/:id/complete', loginVerification, roleVerification('empl
   try {
     await conn.beginTransaction();
 
-    const [deliv] = await conn.query('SELECT delivery_status FROM Deliveries WHERE delivery_id = ?', [deliveryId]);
+    const [deliv] = await conn.query('SELECT delivery_status FROM Deliveries WHERE delivery_id = ? FOR UPDATE', [deliveryId]);
     if (deliv.length === 0) {
       await conn.rollback();
       return res.status(404).json({ error: 'Delivery trip not found.' });
     }
 
+    // A trip can only be finished once, so a delivered trip can't be marked failed later
+    if (deliv[0].delivery_status !== 'Out for Delivery') {
+      await conn.rollback();
+      return res.status(409).json({ error: `Trip #${deliveryId} is already ${deliv[0].delivery_status}.` });
+    }
+
     await conn.query('UPDATE Deliveries SET delivery_status = ? WHERE delivery_id = ?', [deliveryStatus, deliveryId]);
 
+    // Only orders still on the robot change. One already marked delivered stays delivered.
     const [orders] = await conn.query(`
       SELECT o.order_id, o.user_id
       FROM DeliveryOrders AS do
       JOIN Orders AS o ON do.order_id = o.order_id
-      WHERE do.delivery_id = ?
+      WHERE do.delivery_id = ? AND o.status = 'Out for Delivery'
     `, [deliveryId]);
 
     for (const order of orders) {

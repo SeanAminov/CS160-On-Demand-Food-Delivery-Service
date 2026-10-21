@@ -66,9 +66,28 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
           </p>
         </div>
         <div>
-          <button id="dispatch-trip-btn" class="button primary" ${stagedOrders.length === 0 ? 'disabled' : ''} style="padding: 12px 20px;">
-            🚀 Dispatch Robot Trip (${stagedOrders.length} staged)
-          </button>
+            ${
+              stagedOrders.length > 0
+              ? `
+                <a
+                  class="button primary"
+                  href="#/employee-shipping"
+                  style="padding: 12px 20px;"
+                >
+                  Review and Assign Robot
+                  (${stagedOrders.length} staged)
+                </a>
+              `
+              : `
+                <button
+                  class="button primary"
+                  disabled
+                  style="padding: 12px 20px;"
+                >
+                  No Staged Orders
+                </button>
+              `
+            }
         </div>
       </div>
 
@@ -90,7 +109,7 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
           <div class="card" style="margin-bottom: 14px; border-left: 4px solid #047857;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
               <div>
-                <b>Trip #${t.delivery_id}</b> &bull; Status: <span style="color: #047857; font-weight: bold;">Out for Delivery</span>
+                <b>Trip #${t.delivery_id}</b>${t.robot ? ` &bull; ${t.robot}` : ''} &bull; Status: <span style="color: #047857; font-weight: bold;">Out for Delivery</span>
                 <span class="muted" style="margin-left: 10px; font-size: 13px;">Departed: ${new Date(t.departure_time || t.created_at).toLocaleTimeString()}</span>
               </div>
               <div class="buttons" style="margin-top: 0;">
@@ -133,15 +152,12 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
             <td style="font-size: 13px;">${order.delivery_address}</td>
             <td>
               <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                ${order.status === 'Pending' ? `
-                  <button class="button small primary transition-btn" data-id="${order.order_id}" data-status="Preparing">
-                    Start Preparing
-                  </button>
-                ` : `
-                  <button class="button small primary transition-btn" data-id="${order.order_id}" data-status="Staged" style="background: #6d28d9; border-color: #6d28d9;">
-                    Mark Staged
-                  </button>
-                `}
+                <a
+                  class="button small primary"
+                  href="#/employee-packing?id=${order.order_id}"
+                >
+                  Open Packing
+                </a>
                 <button class="button small cancel-btn" data-id="${order.order_id}" style="color: #b91c1c; border-color: #b91c1c;">
                   Cancel
                 </button>
@@ -153,43 +169,9 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
     `}
   `;
 
-  // Attach event handlers
-  const dispatchBtn = app.querySelector('#dispatch-trip-btn');
-  if (dispatchBtn) {
-    dispatchBtn.addEventListener('click', async () => {
-      dispatchBtn.disabled = true;
-      dispatchBtn.textContent = 'Building Trip & Optimizing Route...';
-      try {
-        const res = await fetch('/deliveries/batches', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to dispatch trip.');
-        await renderDashboard(app, `Trip #${data.delivery_id} dispatched! Loaded ${data.order_count} orders (${data.total_weight} lbs).`);
-      } catch (err) {
-        await renderDashboard(app, err.message, true);
-      }
-    });
-  }
-
-  for (const btn of app.querySelectorAll('.transition-btn')) {
-    btn.addEventListener('click', async () => {
-      const orderId = btn.dataset.id;
-      const targetStatus = btn.dataset.status;
-      btn.disabled = true;
-      try {
-        const res = await fetch(`/orders/${orderId}/status`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: targetStatus })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update order status.');
-        await renderDashboard(app, `Order #${orderId} moved to ${targetStatus}.`);
-      } catch (err) {
-        await renderDashboard(app, err.message, true);
-      }
-    });
-  }
-
+  // Attach event handlers.
+  // Dispatching a trip happens on the Waiting to Ship page, and moving an order
+  // to Preparing and Staged happens on the packing page.
   for (const btn of app.querySelectorAll('.cancel-btn')) {
     btn.addEventListener('click', async () => {
       const orderId = btn.dataset.id;

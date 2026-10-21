@@ -1,13 +1,20 @@
+import { getUser } from '../user.js';
+
 export default {
   title: 'Home',
-  show(app) {
+  async show(app) {
+    // The login button is only for people who aren't logged in,
+    // and the dashboard buttons are only for staff
+    const user = await getUser();
+    const role = user ? user.role : '';
+
     app.innerHTML = `
       <section class="hero">
         <h1>Organic groceries delivered in downtown San Jose</h1>
         <p>Order fresh fruit, vegetables, and pantry staples online. Delivery is free on orders under 20 pounds.</p>
         <div class="buttons">
           <a class="button primary" href="#/catalog">Shop Now</a>
-          <a class="button" href="#/login">Log In or Register</a>
+          ${user ? '' : '<a class="button" href="#/login">Log In or Register</a>'}
         </div>
       </section>
 
@@ -26,11 +33,13 @@ export default {
         </a>
       </div>
 
-      <h2>Store staff</h2>
-      <div class="buttons">
-        <a class="button" href="#/employee">Employee Dashboard</a>
-        <a class="button" href="#/manager">Manager Dashboard</a>
-      </div>
+      ${role === 'employee' || role === 'manager' ? `
+        <h2>Store staff</h2>
+        <div class="buttons">
+          <a class="button" href="#/employee">Employee Dashboard</a>
+          ${role === 'manager' ? '<a class="button" href="#/manager">Manager Dashboard</a>' : ''}
+        </div>
+      ` : ''}
     `;
   },
 };

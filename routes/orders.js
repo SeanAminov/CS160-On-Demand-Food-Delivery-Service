@@ -1,47 +1,34 @@
 const express = require('express');
 const pool = require('../db');
 const { loginVerification, roleVerification } = require('../auth');
+const { checkAddress } = require('../address');
+const Stripe = require('stripe');
 const router = express.Router();
 
 const TAX_RATE = process.env.TAX_RATE ? Number(process.env.TAX_RATE) : 0.09375;
 const FREE_DELIVERY_LIMIT = 20;
 const DELIVERY_FEE = 10;
 
-// Geocoding and Downtown San Jose service area validator
-function validateDowntownSanJose(address) {
-  if (!address || typeof address !== 'string') return { valid: false };
-  const lower = address.toLowerCase().trim();
+// Stripe test mode. The secret key stays on the server in .env. If someone hasn't
+// added it yet, the site still runs and checkout says what's missing.
+const stripe = process.env.STRIPE_SECRET_KEY ? Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
-  // Reject explicit addresses outside San Jose
-  const outsideCities = ['san francisco', 'oakland', 'fremont', 'palo alto', 'sunnyvale', 'santa clara', 'mountain view', 'cupertino'];
-  if (outsideCities.some(city => lower.includes(city))) {
-    return { valid: false };
+// Gives the money for an order back through Stripe and returns the refund ID.
+// Orders from before Stripe was hooked up have made up payment IDs, so there's
+// nothing to send back to Stripe for those.
+async function refundOrder(conn, orderId) {
+  const [payments] = await conn.query(
+    "SELECT stripe_transaction_id FROM Transactions WHERE order_id = ? AND payment_status = 'succeeded'",
+    [orderId]
+  );
+  if (payments.length > 0 && payments[0].stripe_transaction_id.startsWith('pi_')) {
+    if (!stripe) {
+      throw new Error('Stripe keys are missing from .env, so the refund could not be sent.');
+    }
+    const refund = await stripe.refunds.create({ payment_intent: payments[0].stripe_transaction_id });
+    return refund.id;
   }
-
-  // Valid Downtown San Jose ZIP codes and markers
-  const hasDowntownZip = /\b(95110|95112|95113|95116|95192)\b/.test(address);
-  const hasSanJoseMention = lower.includes('san jose') || lower.includes('downtown') || lower.includes('sjsu');
-
-  if (!hasDowntownZip && !hasSanJoseMention) {
-    return { valid: false };
-  }
-
-  // Generate deterministic coordinates within Downtown San Jose service area
-  // Downtown center ~ (37.3352, -121.8811)
-  let hash = 0;
-  for (let i = 0; i < address.length; i++) {
-    hash = (hash << 5) - hash + address.charCodeAt(i);
-    hash |= 0;
-  }
-  const latOffset = ((Math.abs(hash) % 1000) / 50000) * (hash % 2 === 0 ? 1 : -1);
-  const lngOffset = ((Math.abs(hash >> 3) % 1000) / 50000) * (hash % 2 === 0 ? 1 : -1);
-
-  const lat = Number((37.3352 + latOffset).toFixed(6));
-  const lng = Number((-121.8811 + lngOffset).toFixed(6));
-
-  // Verify coordinates are strictly within Downtown San Jose bounding box
-  const inBounds = lat >= 37.31 && lat <= 37.36 && lng >= -121.92 && lng <= -121.86;
-  return { valid: inBounds, lat, lng };
+  return 're_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
 
 // Allowed state transitions per Section 5 of Part 2 specification
@@ -55,21 +42,32 @@ const ALLOWED_TRANSITIONS = {
   'Cancelled': []
 };
 
+// GET /stripe-key
+// The checkout page needs the publishable key to show Stripe's card box.
+// It's fine for the browser to see this one. The secret key never leaves the server.
+router.get('/stripe-key', (req, res) => {
+  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null });
+});
+
 // POST /checkout (Role: Customer)
+// The browser sends a Stripe payment method ID (pm_...) instead of a card number.
+// Stripe's card box turns the card into that ID, so card numbers never reach our server.
 router.post('/checkout', loginVerification, async (req, res) => {
   const userId = req.session.user.user_id;
-  const { delivery_address, card_number, simulate_decline } = req.body;
+  // delivery_address has the address boxes from the page: street, unit, city, state, and zip
+  const { delivery_address, payment_method_id } = req.body || {};
 
-  if (!delivery_address || typeof delivery_address !== 'string' || !delivery_address.trim()) {
-    return res.status(400).json({ error: 'Delivery address is required.' });
+  // Validate the address and the Downtown San Jose service area
+  const location = checkAddress(delivery_address);
+  if (location.error) {
+    return res.status(location.status).json({ error: location.error });
   }
 
-  // Validate Downtown San Jose service area
-  const location = validateDowntownSanJose(delivery_address);
-  if (!location.valid) {
-    return res.status(422).json({
-      error: 'Delivery address is outside our Downtown San Jose service area (ZIPs 95110, 95112, 95113, 95116, 95192).'
-    });
+  if (typeof payment_method_id !== 'string' || !payment_method_id.startsWith('pm_')) {
+    return res.status(400).json({ error: 'Please enter your card details.' });
+  }
+  if (!stripe) {
+    return res.status(500).json({ error: 'Payments are not set up on this server yet. Add the Stripe keys to .env.' });
   }
 
   // Retrieve user's cart
@@ -109,31 +107,13 @@ router.post('/checkout', loginVerification, async (req, res) => {
   totalWeight = Number(totalWeight.toFixed(2));
   subtotal = Number(subtotal.toFixed(2));
 
-  // Payment simulation (Stripe Test Mode)
-  // Decline condition: simulate_decline === true or card ending in '0002'
-  const isDeclined = Boolean(
-    simulate_decline === true ||
-    (typeof card_number === 'string' && card_number.replace(/\s+/g, '').endsWith('0002'))
-  );
-
-  if (isDeclined) {
-    const failedTxId = 'ch_fail_' + Date.now().toString(36);
-    await pool.query(`
-      INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
-      VALUES (NULL, ?, ?, 'declined')
-    `, [failedTxId, totalPrice]);
-
-    return res.status(402).json({
-      error: 'Payment declined. Card was declined by test processor. Cart remains unchanged.'
-    });
-  }
-
-  // Successful payment -> Execute transactional order placement
   const conn = await pool.getConnection();
+  let payment = null;
   try {
     await conn.beginTransaction();
 
-    // Verify stock availability with row-level locks
+    // Verify stock availability with row-level locks.
+    // This happens before the charge, so nobody pays for something we're out of.
     for (const item of items) {
       const [inv] = await conn.query(
         'SELECT quantity FROM Inventory WHERE product_id = ? FOR UPDATE',
@@ -147,6 +127,44 @@ router.post('/checkout', loginVerification, async (req, res) => {
       }
     }
 
+    // Charge the card through Stripe. The amount comes from our database, not the browser.
+    try {
+      payment = await stripe.paymentIntents.create({
+        amount: Math.round(totalPrice * 100),
+        currency: 'usd',
+        payment_method: payment_method_id,
+        confirm: true,
+        // Card payments only, so nobody gets sent to another website to pay
+        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+        description: `OFS order for user #${userId}`
+      });
+    } catch (err) {
+      await conn.rollback();
+      if (err.type !== 'StripeCardError') {
+        console.error('Stripe error:', err.message);
+        return res.status(502).json({ error: 'The payment could not go through. Please try again.' });
+      }
+      // Keep a record of the declined payment
+      const failedTxId = err.payment_intent ? err.payment_intent.id : 'declined_' + Date.now().toString(36);
+      await pool.query(`
+        INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
+        VALUES (NULL, ?, ?, 'declined')
+      `, [failedTxId, totalPrice]);
+      return res.status(402).json({ error: `${err.message} Your cart is unchanged.` });
+    }
+
+    // Some test cards ask for an extra check with the bank, which we don't support yet.
+    // No money moves for those, so the payment just gets cancelled.
+    if (payment.status !== 'succeeded') {
+      await conn.rollback();
+      const unfinishedId = payment.id;
+      payment = null;
+      await stripe.paymentIntents.cancel(unfinishedId);
+      return res.status(402).json({
+        error: 'This card needs an extra verification step that we don\'t support yet. Please try a different card.'
+      });
+    }
+
     // 1. Create Order
     const [orderRes] = await conn.query(`
       INSERT INTO Orders (
@@ -155,7 +173,7 @@ router.post('/checkout', loginVerification, async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
     `, [
       userId, subtotal, totalWeight, deliveryFee, taxAmount, totalPrice,
-      delivery_address.trim(), location.lat, location.lng
+      location.address, location.lat, location.lng
     ]);
     const orderId = orderRes.insertId;
 
@@ -172,11 +190,10 @@ router.post('/checkout', loginVerification, async (req, res) => {
     }
 
     // 3. Record Successful Stripe Transaction
-    const stripeTxId = 'ch_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
     await conn.query(`
       INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
       VALUES (?, ?, ?, 'succeeded')
-    `, [orderId, stripeTxId, totalPrice]);
+    `, [orderId, payment.id, totalPrice]);
 
     // 4. Clear Customer's Cart
     await conn.query('DELETE FROM CartItems WHERE cart_id = ?', [cartId]);
@@ -201,6 +218,14 @@ router.post('/checkout', loginVerification, async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
+    // If the card was charged but the order couldn't be saved, give the money back
+    if (payment) {
+      try {
+        await stripe.refunds.create({ payment_intent: payment.id });
+      } catch (refundErr) {
+        console.error('Refund after failed checkout did not work:', refundErr.message);
+      }
+    }
     console.error('Checkout error:', err);
     res.status(500).json({ error: 'Order creation failed. Please try again.' });
   } finally {
@@ -279,7 +304,7 @@ router.get('/orders/:id', loginVerification, async (req, res) => {
 // PUT /orders/:id/status (Employee, Manager)
 router.put('/orders/:id/status', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
   const orderId = Number(req.params.id);
-  const { status: targetStatus } = req.body;
+  const { status: targetStatus } = req.body || {};
 
   if (!targetStatus || typeof targetStatus !== 'string') {
     return res.status(400).json({ error: 'Target status is required.' });
@@ -313,7 +338,7 @@ router.put('/orders/:id/status', loginVerification, roleVerification('employee',
 
       await conn.query('UPDATE Orders SET status = ? WHERE order_id = ?', ['Cancelled', orderId]);
 
-      const refundTxId = 're_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      const refundTxId = await refundOrder(conn, orderId);
       await conn.query(`
         INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
         VALUES (?, ?, ?, 'refunded')
@@ -328,7 +353,8 @@ router.put('/orders/:id/status', loginVerification, roleVerification('employee',
       return res.json({ message: 'Order cancelled, inventory restored, and refund recorded.', order_id: orderId, status: 'Cancelled' });
     } catch (err) {
       await conn.rollback();
-      throw err;
+      console.error('Cancel order error:', err);
+      return res.status(500).json({ error: 'Could not cancel order.' });
     } finally {
       conn.release();
     }
@@ -371,7 +397,7 @@ router.post('/orders/:id/cancel', loginVerification, roleVerification('employee'
 
     await conn.query('UPDATE Orders SET status = ? WHERE order_id = ?', ['Cancelled', orderId]);
 
-    const refundTxId = 're_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    const refundTxId = await refundOrder(conn, orderId);
     await conn.query(`
       INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
       VALUES (?, ?, ?, 'refunded')
