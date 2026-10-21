@@ -316,13 +316,13 @@ SET image_url = CASE name
     WHEN 'Ground Beef' THEN 'https://images.unsplash.com/photo-1588347818036-558601350947?auto=format&fit=crop&w=800&q=80'
     WHEN 'Brown Rice' THEN 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80'
     WHEN 'Spaghetti Pasta' THEN 'https://images.unsplash.com/photo-1551892374-ecf8754cf8b0?auto=format&fit=crop&w=800&q=80'
-    WHEN 'Tomato Pasta Sauce' THEN 'https://images.unsplash.com/photo-1472476442910-44a20e994a6c?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Tomato Pasta Sauce' THEN 'https://www.gurkerl.at/cdn-cgi/image/f%3Dauto%2Cw%3D500%2Ch%3D500%2Cq%3D75/https%3A/cdn.gurkerl.at/images/grocery/products/17399/17399-1617882053333.jpg'
     WHEN 'Potato Chips' THEN 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?auto=format&fit=crop&w=800&q=80'
     WHEN 'Granola Bars' THEN 'https://images.unsplash.com/photo-1598373182133-52452f7691ef?auto=format&fit=crop&w=800&q=80'
     WHEN 'Orange Juice' THEN 'https://images.unsplash.com/photo-1600271886742-f049cd451bba?auto=format&fit=crop&w=800&q=80'
-    WHEN 'Bottled Water' THEN 'https://images.unsplash.com/photo-1564419320461-6870880221ad?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Bottled Water' THEN 'https://i5.walmartimages.com/asr/83568193-2418-40f0-8367-4fd80481e2f8_1.fc5284020d9e9b9bcd45d777a9e62bb5.jpeg?odnBg=ffffff&odnHeight=1000&odnWidth=1000'
     WHEN 'Frozen Cheese Pizza' THEN 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80'
-    WHEN 'Frozen Mixed Vegetables' THEN 'https://images.unsplash.com/photo-1587334206596-c0f9f7dccbe6?auto=format&fit=crop&w=800&q=80'
+    WHEN 'Frozen Mixed Vegetables' THEN 'https://d2lnr5mha7bycj.cloudfront.net/product-image/file/large_ccdf2909-c870-48af-913d-c3ca75b7c7c2.jpg'
     ELSE image_url
 END
 WHERE image_url IS NULL;
