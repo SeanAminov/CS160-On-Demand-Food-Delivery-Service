@@ -2,10 +2,12 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const pool = require('./db');
-const {loginVerification, roleVerification} = require('./auth');
+const { loginVerification, roleVerification } = require('./auth');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 const userRoutes = require('./routes/users');
 const cartRoutes = require('./routes/cart');
 const employeeRoutes = require('./routes/employee');
@@ -17,10 +19,14 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'development-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: {httpOnly: true, sameSite: 'lax', maxAge: 1000*60*30}
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 30
+  }
 }));
 
 app.get('/products', async (req, res) => {
@@ -29,7 +35,9 @@ app.get('/products', async (req, res) => {
       SELECT
         p.product_id,
         p.name,
+        p.category,
         p.description,
+        p.image_url,
         p.price,
         p.weight,
         p.active,
@@ -43,6 +51,7 @@ app.get('/products', async (req, res) => {
     res.json(products);
   } catch (error) {
     console.error('Error loading products:', error);
+
     res.status(500).json({
       error: 'Failed to load products'
     });
