@@ -11,9 +11,10 @@ const config = {
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
-  multipleStatements: true,
 };
 
+// Only the setup connection below runs several statements at once.
+// The pool the routes use runs one at a time, which makes SQL injection harder.
 const pool = mysql.createPool(config);
 
 async function initializeDatabase() {
