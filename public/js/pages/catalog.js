@@ -21,7 +21,8 @@ export default {
     const response = await fetch('/products');
 
     if (!response.ok) {
-      throw new Error('Could not load products.');
+      app.innerHTML = '<h1>Shop</h1><p class="message">Could not load products.</p>';
+      return;
     }
 
     const products = await response.json();
@@ -36,7 +37,7 @@ export default {
       const imageUrl = escapeHtml(product.image_url || FALLBACK_IMAGE);
 
       return `
-        <div class="card">
+        <div class="card product-card">
           <img
             class="product-image"
             src="${imageUrl}"

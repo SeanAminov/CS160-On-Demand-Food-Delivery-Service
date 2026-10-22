@@ -94,12 +94,19 @@ footer {
 }
 
 .card {
-  overflow: hidden;
+  padding: 18px;
   border: 1px solid #d5e2d8;
   border-radius: 10px;
   background: white;
   color: inherit;
   text-decoration: none;
+}
+
+/* Shop cards have no padding so the photo reaches the edges.
+   Every other card on the site keeps the padding above. */
+.product-card {
+  padding: 0;
+  overflow: hidden;
 }
 
 .product-image {
@@ -110,17 +117,17 @@ footer {
   background: #e6f1e8;
 }
 
-.card-content,
-.card > .button {
+.product-card .card-content,
+.product-card > .button {
   margin-right: 18px;
   margin-left: 18px;
 }
 
-.card-content {
+.product-card .card-content {
   padding-top: 14px;
 }
 
-.card > .button {
+.product-card > .button {
   margin-bottom: 18px;
 }
 

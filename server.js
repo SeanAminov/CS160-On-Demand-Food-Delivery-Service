@@ -2,6 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const pool = require('./db');
+const { initializeDatabase } = require('./db');
 const { loginVerification, roleVerification } = require('./auth');
 
 
@@ -69,6 +70,15 @@ app.use('/employee', loginVerification, roleVerification('employee', 'manager'),
 // Only managers can get manager data.
 app.use('/manager', loginVerification, roleVerification('manager'), managerRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+// Set up the database first (tables, new columns, and sample products), then start the server
+initializeDatabase()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Could not set up the database. Check that MySQL is running and that .env is right.');
+    console.error(error.message);
+    process.exit(1);
+  });

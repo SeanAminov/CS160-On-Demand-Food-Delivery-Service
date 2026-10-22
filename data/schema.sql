@@ -12,6 +12,24 @@ CREATE TABLE IF NOT EXISTS Users (
     address VARCHAR(255) NULL
 );
 
+-- Add the saved address column when upgrading an existing database,
+-- the same way the image column is added below.
+SET @address_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'Users'
+      AND COLUMN_NAME = 'address'
+);
+SET @add_address_column_sql = IF(
+    @address_column_exists = 0,
+    'ALTER TABLE Users ADD COLUMN address VARCHAR(255) NULL',
+    'SELECT 1'
+);
+PREPARE add_address_column_statement FROM @add_address_column_sql;
+EXECUTE add_address_column_statement;
+DEALLOCATE PREPARE add_address_column_statement;
+
 CREATE TABLE IF NOT EXISTS Products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
@@ -99,6 +117,23 @@ CREATE TABLE IF NOT EXISTS Deliveries (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     robot VARCHAR(20) NULL
 );
+
+-- Add the robot column when upgrading an existing database
+SET @robot_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'Deliveries'
+      AND COLUMN_NAME = 'robot'
+);
+SET @add_robot_column_sql = IF(
+    @robot_column_exists = 0,
+    'ALTER TABLE Deliveries ADD COLUMN robot VARCHAR(20) NULL',
+    'SELECT 1'
+);
+PREPARE add_robot_column_statement FROM @add_robot_column_sql;
+EXECUTE add_robot_column_statement;
+DEALLOCATE PREPARE add_robot_column_statement;
 
 CREATE TABLE IF NOT EXISTS Transactions (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,

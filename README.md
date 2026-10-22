@@ -45,17 +45,11 @@ Clone the repo with GitHub Desktop, or run this in a terminal:
 * Windows without VS Code: open the folder in File Explorer, right click an empty spot, and choose Open in Terminal.
 * Mac without VS Code: open the Terminal app, type `cd ` with a space after it, drag the project folder into the window, and press Return.
 
-### 5. Create the database
+### 5. The database
 
-In MySQL Workbench, click your local connection to connect, then go to File > Open SQL Script, pick `data/schema.sql`, and click the lightning bolt to run it. This creates the `food_delivery_db` database, all the tables, and the sample products.
+You don't have to run anything for this. Every time the server starts, it runs `data/schema.sql`, which makes the `food_delivery_db` database, the tables, and the sample products if they're missing, and adds any new columns someone put in the schema. It never deletes anything or makes duplicate products.
 
-Running it again won't make duplicate products, but it also won't add new columns to tables you already have. If you made your database before we added saved addresses and robots, run this once in Workbench:
-
-    USE food_delivery_db;
-    ALTER TABLE Users ADD COLUMN address VARCHAR(255) NULL;
-    ALTER TABLE Deliveries ADD COLUMN robot VARCHAR(20) NULL;
-
-If it says "Duplicate column name", you already have them and you're all set.
+MySQL just has to be running, and your MySQL password has to be in `.env` (next step). You can still open `data/schema.sql` in MySQL Workbench and run it yourself, and Workbench is handy for looking at the data.
 
 ### 6. Make your .env file
 
@@ -74,7 +68,7 @@ Git ignores `.env`, so it never gets uploaded. Everyone makes their own. The dat
 
 **The Stripe keys:** the team shares one Stripe account in test mode, so no real money ever moves. Ask Sean for the keys in a private message. Never put them in the code, on GitHub, or in a public channel. The publishable key (`pk_test_`) is fine for browsers to see, but the secret key (`sk_test_`) can make charges and refunds, so it has to stay private. Without the keys the site still runs, but checkout says payments aren't set up.
 
-**What SESSION_SECRET is for:** when you log in, the server gives your browser a cookie with a session ID, and it signs that cookie using this secret. When the cookie comes back, the server checks the signature, so nobody can edit their cookie to pretend to be someone else. The secret has to stay private, which is why it goes in `.env` instead of the code. If it's missing, the server crashes the first time someone logs in. If you change it, everyone gets logged out.
+**What SESSION_SECRET is for:** when you log in, the server gives your browser a cookie with a session ID, and it signs that cookie using this secret. When the cookie comes back, the server checks the signature, so nobody can edit their cookie to pretend to be someone else. The secret has to stay private, which is why it goes in `.env` instead of the code. If it's missing, the server uses a test secret that's written in the code, which is fine on your own computer but not safe anywhere real. If you change it, everyone gets logged out.
 
 Sessions are kept in the server's memory, so restarting the server also logs everyone out. That's normal.
 
@@ -119,7 +113,7 @@ Cancelling a paid order refunds it through Stripe. Payments and refunds show up 
 ## Folders
 
     server.js          the Express server
-    db.js              the MySQL connection, using the settings in .env
+    db.js              the MySQL connection, and the setup that runs schema.sql when the server starts
     auth.js            password hashing and the login and role checks
     address.js         checks delivery addresses for checkout and My Account
     routes/            the API routes (users, cart, orders, deliveries, employee, manager)
