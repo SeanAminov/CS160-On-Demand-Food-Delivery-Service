@@ -144,7 +144,7 @@ Each page is its own file in `public/js/pages`. The part of the URL after the # 
 * `#/manager-inventory` manager-inventory.js
 * `#/manager-orders` manager-orders.js
 
-All of these work. On the manager pages, changing inventory and cancelling orders aren't hooked up yet, and the buttons say so.
+All of these work. Only managers can cancel orders, so employees don't see the Cancel buttons.
 
 Pages starting with `#/employee` are only for employees and managers, and `#/manager` is only for managers. `app.js` checks this before showing the page. The server also checks the role before sending any employee data, and that's the check that actually protects it.
 
@@ -161,11 +161,13 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 * `GET /stripe-key` the publishable key the checkout page needs for Stripe's card box
 * `POST /checkout` charges the card through Stripe and turns the cart into an order
 * `GET /orders`, `GET /orders/:id` a customer's own orders, or every order for staff
-* `PUT /orders/:id/status`, `POST /orders/:id/cancel` move an order to its next status, or cancel and refund it (employees and managers only)
+* `PUT /orders/:id/status` move an order to its next status (employees and managers, but only managers can cancel)
+* `POST /orders/:id/cancel` cancel an order, refund it, and put its items back in stock (managers only)
 * `POST /deliveries/batches` sends a robot out with staged orders (employees and managers only)
 * `GET /deliveries`, `GET /deliveries/:id`, `PUT /deliveries/:id/complete` robot trips
 * `GET /employee/orders` paid orders that need to be packed (employees and managers only)
 * `GET /manager/inventory` stock for every product (managers only)
+* `PATCH /manager/inventory/:productId` raise or lower one product's stock (managers only)
 
 The rest of the planned routes are in the API Design section of our Part 2 document.
 
@@ -174,10 +176,9 @@ The rest of the planned routes are in the API Design section of our Part 2 docum
 The backlog in our Part 2 document says who is doing what.
 
 1. Delivery routes and the map from Google Maps. For now, addresses are only checked by ZIP code.
-2. Manager pages: changing inventory and cancelling orders.
-3. Shop page: category filter.
-4. Password reset.
-5. Test everything using the test plan from Part 2.
+2. Shop page: category filter.
+3. Password reset.
+4. Test everything using the test plan from Part 2.
 
 Part III, the working site and our 12 minute presentation, is due 11/23.
 

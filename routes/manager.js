@@ -43,7 +43,7 @@ router.get('/inventory', async (req, res) => {
 // Adjust inventory quantity
 router.patch('/inventory/:productId', async (req, res) => {
   const productId = Number(req.params.productId);
-  const change = Number(req.body.change);
+  const change = Number((req.body || {}).change);
 
   if (!Number.isInteger(productId)) {
     return res.status(400).json({
@@ -53,11 +53,23 @@ router.patch('/inventory/:productId', async (req, res) => {
 
   if (!Number.isInteger(change) || change === 0) {
     return res.status(400).json({
-      error: 'Inventory change must be either 1 or -1.',
+      error: 'Inventory change must be a whole number other than 0.',
     });
   }
 
   try {
+    // Change the quantity in one step instead of reading it and writing it back,
+    // so a customer checking out at the same time doesn't get overwritten.
+    // The WHERE part stops the quantity from going below zero.
+    const [result] = await pool.query(
+      `
+        UPDATE Inventory
+        SET quantity = quantity + ?
+        WHERE product_id = ? AND quantity + ? >= 0
+      `,
+      [change, productId, change]
+    );
+
     const [rows] = await pool.query(
       `
         SELECT quantity
@@ -73,27 +85,15 @@ router.patch('/inventory/:productId', async (req, res) => {
       });
     }
 
-    const currentQuantity = Number(rows[0].quantity);
-    const updatedQuantity = currentQuantity + change;
-
-    if (updatedQuantity < 0) {
+    if (result.affectedRows === 0) {
       return res.status(400).json({
         error: 'Inventory quantity cannot be below zero.',
       });
     }
 
-    await pool.query(
-      `
-        UPDATE Inventory
-        SET quantity = ?
-        WHERE product_id = ?
-      `,
-      [updatedQuantity, productId]
-    );
-
     res.json({
       product_id: productId,
-      quantity: updatedQuantity,
+      quantity: rows[0].quantity,
     });
   } catch (error) {
     console.error('Inventory update error:', error);

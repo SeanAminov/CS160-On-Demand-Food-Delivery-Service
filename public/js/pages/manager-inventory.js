@@ -351,6 +351,9 @@ async function saveInventoryChanges(app) {
         if (item) {
           item.quantity = result.quantity;
         }
+
+        // This one is saved, so it won't be sent again if another one fails
+        delete pendingChanges[productId];
       })
     );
 
@@ -366,6 +369,10 @@ async function saveInventoryChanges(app) {
     message.className =
       'inventory-message success';
   } catch (error) {
+    // Show the new numbers for the ones that saved. Only the ones
+    // that failed are still in the list, ready to try again.
+    renderInventory(app);
+
     const message = app.querySelector(
       '#inventory-message'
     );
@@ -373,9 +380,6 @@ async function saveInventoryChanges(app) {
     message.textContent = error.message;
     message.className =
       'inventory-message error';
-
-    confirmButton.disabled = false;
-    confirmButton.textContent = 'Confirm Updates';
   }
 }
 

@@ -1,9 +1,15 @@
 import { money } from '../cart-api.js';
+import { getUser } from '../user.js';
+
+// Only managers can cancel orders, so employees don't see the Cancel buttons
+let isManager = false;
 
 export default {
   title: 'Employee Dashboard',
   async show(app) {
     try {
+      const user = await getUser();
+      isManager = Boolean(user && user.role === 'manager');
       await renderDashboard(app);
     } catch (err) {
       app.innerHTML = `<h1>Employee Dashboard</h1><p class="message">${err.message}</p>`;
@@ -158,9 +164,11 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
                 >
                   Open Packing
                 </a>
-                <button class="button small cancel-btn" data-id="${order.order_id}" style="color: #b91c1c; border-color: #b91c1c;">
-                  Cancel
-                </button>
+                ${isManager ? `
+                  <button class="button small cancel-btn" data-id="${order.order_id}" style="color: #b91c1c; border-color: #b91c1c;">
+                    Cancel
+                  </button>
+                ` : ''}
               </div>
             </td>
           </tr>
