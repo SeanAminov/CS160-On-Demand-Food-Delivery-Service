@@ -22,7 +22,8 @@ router.get('/inventory', async (req, res) => {
         p.category,
         p.price,
         p.weight,
-        i.quantity
+        i.quantity,
+        i.reorder_level
       FROM Products AS p
       JOIN Inventory AS i
         ON p.product_id = i.product_id

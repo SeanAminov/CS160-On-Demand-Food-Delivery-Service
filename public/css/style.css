@@ -723,6 +723,29 @@ table.cart td {
   font-weight: normal;
 }
 
+.inventory-header-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.inventory-quantity-input {
+  width: 80px;
+  padding: 6px 8px;
+  border: 1px solid #b8cdbd;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.low-stock-label {
+  display: block;
+  margin-top: 4px;
+  color: #a12a2a;
+  font-size: 12px;
+  font-weight: bold;
+}
+
 .inventory-message.success {
   color: #2f6f3e;
 }

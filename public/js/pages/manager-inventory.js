@@ -1,14 +1,26 @@
 let inventoryItems = [];
 let pendingChanges = {};
+let showLowStockOnly = false;
 
 function getPendingQuantity(item) {
   return item.quantity + (pendingChanges[item.product_id] || 0);
+}
+
+// A product is low on stock once its saved quantity reaches its reorder level
+function isLowStock(item) {
+  return item.quantity <= item.reorder_level;
 }
 
 function renderInventory(app) {
   const pendingEntries = Object.entries(pendingChanges).filter(
     ([, change]) => change !== 0
   );
+
+  const lowStockCount = inventoryItems.filter(isLowStock).length;
+
+  const visibleItems = showLowStockOnly
+    ? inventoryItems.filter(isLowStock)
+    : inventoryItems;
 
   app.innerHTML = `
     <section class="hero">
@@ -44,9 +56,20 @@ function renderInventory(app) {
             </p>
           </div>
 
-          <span class="inventory-count">
-            ${inventoryItems.length} products
-          </span>
+          <div class="inventory-header-tools">
+            <span class="inventory-count">
+              ${inventoryItems.length} products,
+              ${lowStockCount} low on stock
+            </span>
+
+            <button
+              id="low-stock-toggle"
+              class="button"
+              type="button"
+            >
+              ${showLowStockOnly ? 'Show All Products' : 'Show Low Stock Only'}
+            </button>
+          </div>
         </div>
 
         <div class="inventory-table-wrapper">
@@ -63,7 +86,19 @@ function renderInventory(app) {
             </thead>
 
             <tbody>
-              ${inventoryItems
+              ${
+                visibleItems.length === 0
+                  ? `
+                    <tr>
+                      <td colspan="6" class="muted">
+                        No products are low on stock right now.
+                      </td>
+                    </tr>
+                  `
+                  : ''
+              }
+
+              ${visibleItems
                 .map(
                   (item) => `
                     <tr>
@@ -84,15 +119,31 @@ function renderInventory(app) {
                       </td>
 
                       <td>
-                        <strong class="inventory-quantity">
-                          ${getPendingQuantity(item)}
-                        </strong>
+                        <input
+                          class="inventory-quantity-input"
+                          type="number"
+                          min="0"
+                          step="1"
+                          data-product-id="${item.product_id}"
+                          value="${getPendingQuantity(item)}"
+                          aria-label="Quantity for ${item.name}"
+                        >
 
                         ${
                           pendingChanges[item.product_id]
                             ? `
                               <span class="pending-quantity-label">
                                 pending
+                              </span>
+                            `
+                            : ''
+                        }
+
+                        ${
+                          isLowStock(item)
+                            ? `
+                              <span class="low-stock-label">
+                                Low stock (reorder at ${item.reorder_level})
                               </span>
                             `
                             : ''
@@ -270,6 +321,52 @@ function bindInventoryEvents(app) {
       });
     });
 
+  // Typing an amount works like pressing + or - that many times.
+  // It becomes a pending change until Confirm Updates is pressed.
+  app
+    .querySelectorAll('.inventory-quantity-input')
+    .forEach((input) => {
+      input.addEventListener('change', () => {
+        const productId = input.dataset.productId;
+
+        const item = inventoryItems.find(
+          (currentItem) =>
+            String(currentItem.product_id) ===
+            String(productId)
+        );
+
+        const typedQuantity = Number(input.value);
+
+        // Only whole numbers of 0 or more. Anything else puts the box back.
+        if (
+          !item ||
+          input.value.trim() === '' ||
+          !Number.isInteger(typedQuantity) ||
+          typedQuantity < 0
+        ) {
+          renderInventory(app);
+          return;
+        }
+
+        const change = typedQuantity - item.quantity;
+
+        if (change === 0) {
+          delete pendingChanges[productId];
+        } else {
+          pendingChanges[productId] = change;
+        }
+
+        renderInventory(app);
+      });
+    });
+
+  const lowStockToggle = app.querySelector('#low-stock-toggle');
+
+  lowStockToggle.addEventListener('click', () => {
+    showLowStockOnly = !showLowStockOnly;
+    renderInventory(app);
+  });
+
   app
     .querySelectorAll('.pending-remove-button')
     .forEach((button) => {
@@ -388,6 +485,7 @@ export default {
 
   async show(app) {
     pendingChanges = {};
+    showLowStockOnly = false;
 
     app.innerHTML = `
       <section class="hero">
