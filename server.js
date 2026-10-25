@@ -63,6 +63,7 @@ app.use('/', userRoutes);
 app.use('/', cartRoutes);
 app.use('/', orderRoutes);
 app.use('/', deliveryRoutes);
+app.use('/manager', managerRoutes);
 // Only employees and managers can get employee data.
 // This is the real check, since anyone can open the page files in a browser.
 app.use('/employee', loginVerification, roleVerification('employee', 'manager'), employeeRoutes);

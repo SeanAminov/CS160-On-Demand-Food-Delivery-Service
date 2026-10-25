@@ -301,10 +301,19 @@ router.get('/orders/:id', loginVerification, async (req, res) => {
   }
 });
 
-// PUT /orders/:id/status (Employee, Manager)
+// PUT /orders/:id/status (Manager)
 router.put('/orders/:id/status', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
   const orderId = Number(req.params.id);
   const { status: targetStatus } = req.body || {};
+  if (
+  targetStatus === 'Cancelled' &&
+  req.session.user.role !== 'manager'
+) {
+  return res.status(403).json({
+    error: 'Only managers can cancel orders.',
+  });
+}
+
 
   if (!targetStatus || typeof targetStatus !== 'string') {
     return res.status(400).json({ error: 'Target status is required.' });
@@ -371,7 +380,7 @@ router.put('/orders/:id/status', loginVerification, roleVerification('employee',
 });
 
 // POST /orders/:id/cancel (Employee, Manager)
-router.post('/orders/:id/cancel', loginVerification, roleVerification('employee', 'manager'), async (req, res) => {
+router.post('/orders/:id/cancel', loginVerification, roleVerification('manager'), async (req, res) => {
   const orderId = Number(req.params.id);
 
   const [orderRows] = await pool.query('SELECT status, user_id, total_price FROM Orders WHERE order_id = ?', [orderId]);

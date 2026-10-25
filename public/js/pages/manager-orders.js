@@ -1,14 +1,36 @@
 let allOrders = [];
+let searchTerm = '';
 
-function formatDate(dateValue) {
-  if (!dateValue) {
-    return '—';
+const cancellableStatuses = [
+  'Pending',
+  'Preparing',
+  'Staged',
+];
+
+function getFilteredOrders() {
+  const searchValue = searchTerm.trim().toLowerCase();
+
+  if (!searchValue) {
+    return allOrders;
   }
 
-  return new Date(dateValue).toLocaleString();
+  return allOrders.filter((order) => {
+    const searchableText = [
+      order.order_id,
+      order.customer,
+      order.customer_email,
+      order.delivery_address,
+      order.status,
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(searchValue);
+  });
 }
 
-function renderOrderResults(app, orders) {
+function renderOrderResults(app) {
+  const orders = getFilteredOrders();
   const resultsContainer = app.querySelector('#order-results');
   const countElement = app.querySelector('#order-count');
 
@@ -30,8 +52,8 @@ function renderOrderResults(app, orders) {
         <thead>
           <tr>
             <th>Order</th>
-            <th>Customer Information</th>
-            <th>Delivery Address</th>
+            <th>Customer</th>
+            <th>Address</th>
             <th>Status</th>
             <th>Total</th>
             <th>Placed</th>
@@ -41,13 +63,14 @@ function renderOrderResults(app, orders) {
 
         <tbody>
           ${orders
-            .map(
-              (order) => `
+            .map((order) => {
+              const canCancel =
+                cancellableStatuses.includes(order.status);
+
+              return `
                 <tr>
                   <td>
-                    <strong class="order-number">
-                      #${order.order_id}
-                    </strong>
+                    <strong>#${order.order_id}</strong>
                   </td>
 
                   <td>
@@ -57,14 +80,14 @@ function renderOrderResults(app, orders) {
                       </strong>
 
                       <span class="muted">
-                        ${order.customer_email || 'No email available'}
+                        ${order.customer_email || 'No email'}
                       </span>
                     </div>
                   </td>
 
                   <td>
                     <span class="order-address">
-                      ${order.delivery_address || 'No address available'}
+                      ${order.delivery_address || 'No address'}
                     </span>
                   </td>
 
@@ -75,74 +98,119 @@ function renderOrderResults(app, orders) {
                   </td>
 
                   <td>
-                    <strong>
-                      $${Number(order.total_price || 0).toFixed(2)}
-                    </strong>
-
-                    <span class="order-weight muted">
-                      ${Number(order.total_weight || 0).toFixed(2)} lb
-                    </span>
+                    $${Number(order.total_price || 0).toFixed(2)}
                   </td>
 
                   <td>
-                    <span class="order-date">
-                      ${formatDate(order.created_at)}
-                    </span>
+                    ${new Date(
+                      order.created_at
+                    ).toLocaleString()}
                   </td>
 
                   <td>
                     <button
                       class="button order-cancel-button"
+                      data-order-id="${order.order_id}"
                       type="button"
-                      disabled
-                      title="Cancellation will be added later"
+                      ${canCancel ? '' : 'disabled'}
                     >
-                      Cancel
+                      ${
+                        order.status === 'Cancelled'
+                          ? 'Cancelled'
+                          : 'Cancel Order'
+                      }
                     </button>
                   </td>
                 </tr>
-              `
-            )
+              `;
+            })
             .join('')}
         </tbody>
       </table>
     </div>
   `;
+
+  bindCancelButtons(app);
 }
 
-function bindOrderSearch(app) {
-  const searchInput = app.querySelector('#order-search');
+function bindCancelButtons(app) {
+  app
+    .querySelectorAll('.order-cancel-button:not(:disabled)')
+    .forEach((button) => {
+      button.addEventListener('click', async () => {
+        const orderId = button.dataset.orderId;
 
-  searchInput.addEventListener('input', () => {
-    const searchValue = searchInput.value.trim().toLowerCase();
+        const confirmed = window.confirm(
+          `Cancel order #${orderId}?`
+        );
 
-    const filteredOrders = allOrders.filter((order) => {
-      const searchableText = [
-        order.order_id,
-        order.customer,
-        order.customer_email,
-        order.delivery_address,
-        order.status,
-      ]
-        .join(' ')
-        .toLowerCase();
+        if (!confirmed) {
+          return;
+        }
 
-      return searchableText.includes(searchValue);
+        button.disabled = true;
+        button.textContent = 'Cancelling...';
+
+        try {
+          const response = await fetch(
+            `/orders/${orderId}/cancel`,
+            {
+              method: 'POST',
+            }
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              result.error || 'Could not cancel order.'
+            );
+          }
+
+          const order = allOrders.find(
+            (currentOrder) =>
+              String(currentOrder.order_id) ===
+              String(orderId)
+          );
+
+          if (order) {
+            order.status = 'Cancelled';
+          }
+
+          renderOrderResults(app);
+
+          const message = app.querySelector('#order-message');
+
+          message.textContent =
+            `Order #${orderId} was cancelled successfully.`;
+          message.className =
+            'order-message success';
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Cancel Order';
+
+          const message = app.querySelector('#order-message');
+
+          message.textContent = error.message;
+          message.className =
+            'order-message error';
+        }
+      });
     });
-
-    renderOrderResults(app, filteredOrders);
-  });
 }
 
 export default {
   title: 'Order Management',
 
   async show(app) {
+    searchTerm = '';
+
     app.innerHTML = `
       <section class="hero">
         <h1>Order Management</h1>
+
         <p class="muted">
-          Review customer orders, delivery information, and order status.
+          Review customer orders and cancel orders when necessary.
         </p>
       </section>
 
@@ -184,11 +252,9 @@ export default {
           </div>
         </div>
 
-        <div id="order-results"></div>
+        <p id="order-message" class="order-message"></p>
 
-        <p class="order-management-note">
-          Order cancellation will be enabled in a future update.
-        </p>
+        <div id="order-results"></div>
       </section>
     `;
 
@@ -201,8 +267,14 @@ export default {
 
       allOrders = await response.json();
 
-      renderOrderResults(app, allOrders);
-      bindOrderSearch(app);
+      renderOrderResults(app);
+
+      app
+        .querySelector('#order-search')
+        .addEventListener('input', (event) => {
+          searchTerm = event.target.value;
+          renderOrderResults(app);
+        });
     } catch (error) {
       app.innerHTML = `
         <section class="hero">
