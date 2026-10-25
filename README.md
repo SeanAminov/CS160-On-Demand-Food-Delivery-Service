@@ -47,7 +47,7 @@ Clone the repo with GitHub Desktop, or run this in a terminal:
 
 ### 5. The database
 
-You don't have to run anything for this. Every time the server starts, it runs `data/schema.sql`, which makes the `food_delivery_db` database, the tables, and the sample products if they're missing, and adds any new columns someone put in the schema. It never deletes anything or makes duplicate products.
+You don't have to run anything for this. Every time the server starts, it runs `data/schema.sql`, which makes the `food_delivery_db` database, the tables, and the sample products if they're missing, and adds any new columns that have an "add if missing" step (see Changing the database below). It never deletes anything or makes duplicate products.
 
 MySQL just has to be running, and your MySQL password has to be in `.env` (next step). You can still open `data/schema.sql` in MySQL Workbench and run it yourself, and Workbench is handy for looking at the data.
 
@@ -185,3 +185,34 @@ Part III, the working site and our 12 minute presentation, is due 11/23.
 ## Working on the repo
 
 Make a new branch for your task, push it, and open a pull request. Have someone on the team look it over before it gets merged into main.
+
+## Changing the database
+
+Every table in `data/schema.sql` uses `CREATE TABLE IF NOT EXISTS`, which only builds a table the first time. If the table is already there, MySQL skips the whole thing, including any column you just typed into it. So everyone who already has the database would never get your new column, and any code that uses it would break for them.
+
+When you add a column:
+
+1. Add it to the table's `CREATE TABLE` so brand new databases get it.
+2. Also add an "add if missing" step right under that table so everyone else gets it. The easiest way is to copy the `address` step under the Users table and change the names. For example, a `phone` column on Users would be:
+
+```sql
+SET @phone_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'Users'
+      AND COLUMN_NAME = 'phone'
+);
+SET @add_phone_column_sql = IF(
+    @phone_column_exists = 0,
+    'ALTER TABLE Users ADD COLUMN phone VARCHAR(20) NULL',
+    'SELECT 1'
+);
+PREPARE add_phone_column_statement FROM @add_phone_column_sql;
+EXECUTE add_phone_column_statement;
+DEALLOCATE PREPARE add_phone_column_statement;
+```
+
+Then restart the server. The terminal should say "Database initialized", and everyone else gets the column the next time they start theirs. Nobody has to run SQL by hand.
+
+A new table only needs `CREATE TABLE IF NOT EXISTS`. New sample rows should skip ones that already exist, the way the products do, so nothing gets added twice.
