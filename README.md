@@ -141,7 +141,7 @@ Each page is its own file in `public/js/pages`. The part of the URL after the # 
 * `#/employee-packing` employee-packing.js
 * `#/employee-shipping` employee-shipping.js, where employees pick a robot and send out a trip
 * `#/manager` manager.js
-* `#/manager-inventory` manager-inventory.js
+* `#/manager-inventory` manager-inventory.js, where managers change stock and see what's running low (at or below its reorder level)
 * `#/manager-orders` manager-orders.js
 
 All of these work. Only managers can cancel orders, so employees don't see the Cancel buttons.
