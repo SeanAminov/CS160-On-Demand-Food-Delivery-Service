@@ -102,9 +102,9 @@ footer {
   text-decoration: none;
 }
 
-/* Shop cards have no padding so the photo reaches the edges.
-   Every other card on the site keeps the padding above. */
 .product-card {
+  display: flex;
+  flex-direction: column;
   padding: 0;
   overflow: hidden;
 }
@@ -124,11 +124,44 @@ footer {
 }
 
 .product-card .card-content {
+  flex: 1;
   padding-top: 14px;
 }
 
-.product-card > .button {
+.product-card > .button,
+.product-cart-controls {
   margin-bottom: 18px;
+}
+
+.low-stock {
+  margin: 8px 0 0;
+  color: #a12622;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.product-cart-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: auto;
+  margin-right: 18px;
+  margin-left: 18px;
+}
+
+.quantity-button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.product-cart-quantity {
+  min-width: 22px;
+  text-align: center;
+  font-weight: bold;
 }
 
 .product-category {
