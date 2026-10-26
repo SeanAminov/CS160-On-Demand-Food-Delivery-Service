@@ -1,6 +1,7 @@
 // TODO: filter by category (fruits, vegetables, pantry)
 
 import { cartRequest, money } from '../cart-api.js';
+import {setupFilters} from './catalog-filters.js';
 
 const FALLBACK_IMAGE =
   'https://placehold.co/800x600/e6f1e8/2f6f3e?text=OFS+Product';
@@ -114,6 +115,7 @@ export default {
         await changeProductQuantity(product, -1, controls, message);
       });
     }
+    setupFilters(app, products);
   }
 };
 
