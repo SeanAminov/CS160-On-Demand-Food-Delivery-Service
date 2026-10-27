@@ -1,3 +1,5 @@
+import { renderRouteMap } from '../route-map.js';
+
 export default {
   title: 'Waiting to Ship',
 
@@ -275,10 +277,17 @@ export default {
               (${Number(trip.total_weight).toFixed(2)} lb).
             </p>
 
+            <div id="dispatched-trip-map" style="margin: 16px 0;"></div>
+
             <a class="button primary" href="#/employee">
               Return to Dashboard
             </a>
           `;
+
+          const mapContainer = content.querySelector('#dispatched-trip-map');
+          if (mapContainer) {
+            renderRouteMap(mapContainer, trip);
+          }
         } catch (error) {
           message.textContent = error.message;
           message.className = 'shipping-message error';
