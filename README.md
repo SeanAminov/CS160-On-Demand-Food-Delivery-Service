@@ -11,7 +11,7 @@ What we're using:
 * Database: MySQL
 * Logins: sessions with express-session, and passwords hashed with bcrypt
 * Payments: Stripe test mode
-* Maps and routing: Google Maps API (not set up yet)
+* Maps and routing: Google Maps API (Geocoding, Directions with departure traffic, and interactive visual map)
 
 ## How to run it
 
@@ -63,10 +63,26 @@ Make a file named `.env` in the main project folder (next to `server.js`) with t
     SESSION_SECRET=any long random text you make up
     STRIPE_PUBLISHABLE_KEY=the team's pk_test_ key
     STRIPE_SECRET_KEY=the team's sk_test_ key
+    GOOGLE_MAPS_API_KEY=your Google Maps API key (optional for local dev)
 
 Git ignores `.env`, so it never gets uploaded. Everyone makes their own. The database password and session secret don't need to match anyone else's, but the Stripe keys are the same for everyone.
 
 **The Stripe keys:** the team shares one Stripe account in test mode, so no real money ever moves. Ask Sean for the keys in a private message. Never put them in the code, on GitHub, or in a public channel. The publishable key (`pk_test_`) is fine for browsers to see, but the secret key (`sk_test_`) can make charges and refunds, so it has to stay private. Without the keys the site still runs, but checkout says payments aren't set up.
+
+**The Google Maps key:** used for address geocoding, multi-stop round-trip route optimization with departure traffic, and rendering the Google Maps visual view on the employee dashboard. Without the key, the site continues to run using built-in Downtown San Jose fallback coordinates and interactive routing so local testing never breaks.
+
+**How to get a Google Maps API key (step by step):**
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and sign in with your Google account.
+2. Click the project dropdown at the top and click **New Project** (you can name it `OFS-Food-Delivery`), then click **Create**.
+3. In the top search bar, search for each of these 3 APIs and click **Enable**:
+   * **Geocoding API**
+   * **Routes API** (Google Maps Platform's modern routing service)
+   * **Maps JavaScript API**
+4. Open the left menu (three lines at top left) and go to **APIs & Services > Credentials**.
+5. Click **+ Create Credentials** at the top of the page and select **API key**.
+6. Copy your key and paste it into your `.env` file next to `GOOGLE_MAPS_API_KEY=`.
+7. (Optional but recommended) Click **Edit API key** on the screen, and under **API restrictions**, select the 3 APIs above (Geocoding API, Routes API, and Maps JavaScript API) so the key is restricted to our delivery services.
 
 **What SESSION_SECRET is for:** when you log in, the server gives your browser a cookie with a session ID, and it signs that cookie using this secret. When the cookie comes back, the server checks the signature, so nobody can edit their cookie to pretend to be someone else. The secret has to stay private, which is why it goes in `.env` instead of the code. If it's missing, the server uses a test secret that's written in the code, which is fine on your own computer but not safe anywhere real. If you change it, everyone gets logged out.
 
@@ -163,8 +179,9 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 * `GET /orders`, `GET /orders/:id` a customer's own orders, or every order for staff
 * `PUT /orders/:id/status` move an order to its next status (employees and managers, but only managers can cancel)
 * `POST /orders/:id/cancel` cancel an order, refund it, and put its items back in stock (managers only)
-* `POST /deliveries/batches` sends a robot out with staged orders (employees and managers only)
+* `POST /deliveries/batches` sends a robot out with staged orders and optimized multi-stop route with traffic (employees and managers only)
 * `GET /deliveries`, `GET /deliveries/:id`, `PUT /deliveries/:id/complete` robot trips
+* `GET /maps-key` Google Maps API key for the frontend interactive map
 * `GET /employee/orders` paid orders that need to be packed (employees and managers only)
 * `GET /manager/inventory` stock for every product (managers only)
 * `PATCH /manager/inventory/:productId` raise or lower one product's stock (managers only)
@@ -175,7 +192,7 @@ The rest of the planned routes are in the API Design section of our Part 2 docum
 
 The backlog in our Part 2 document says who is doing what.
 
-1. Delivery routes and the map from Google Maps. For now, addresses are only checked by ZIP code.
+1. Delivery routes and Google Maps integration (Completed: Geocoding, multi-stop round-trip optimization with traffic departure time, and interactive visual map).
 2. Shop page: category filter.
 3. Password reset.
 4. Test everything using the test plan from Part 2.

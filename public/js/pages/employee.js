@@ -1,5 +1,6 @@
 import { money } from '../cart-api.js';
 import { getUser } from '../user.js';
+import { renderRouteMap } from '../route-map.js';
 
 // Only managers can cancel orders, so employees don't see the Cancel buttons
 let isManager = false;
@@ -119,6 +120,7 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
                 <span class="muted" style="margin-left: 10px; font-size: 13px;">Departed: ${new Date(t.departure_time || t.created_at).toLocaleTimeString()}</span>
               </div>
               <div class="buttons" style="margin-top: 0;">
+                <button class="button small view-map-btn" data-id="${t.delivery_id}"><i class='bx bx-map-pin'></i> View Route Map</button>
                 <button class="button small primary complete-trip" data-id="${t.delivery_id}" data-outcome="Completed">Mark All Delivered</button>
                 <button class="button small complete-trip" data-id="${t.delivery_id}" data-outcome="Failed" style="color: #a12a2a; border-color: #a12a2a;">Mark Delivery Failed</button>
               </div>
@@ -126,6 +128,7 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
             <p style="font-size: 14px; margin: 8px 0 0;">
               Total Weight: <b>${t.total_weight} lb</b> | Orders: <b>${t.order_count}</b> | Est. Distance: <b>${t.total_distance || 0} mi</b>
             </p>
+            <div id="trip-map-container-${t.delivery_id}" style="display: none; margin-top: 12px;"></div>
           </div>
         `).join('')}
       </div>
@@ -212,6 +215,33 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
         await renderDashboard(app, `Trip #${tripId} marked as ${outcome}. Orders updated.`);
       } catch (err) {
         await renderDashboard(app, err.message, true);
+      }
+    });
+  }
+
+  for (const btn of app.querySelectorAll('.view-map-btn')) {
+    btn.addEventListener('click', async () => {
+      const tripId = btn.dataset.id;
+      const container = app.querySelector(`#trip-map-container-${tripId}`);
+      if (!container) return;
+
+      if (container.style.display !== 'none') {
+        container.style.display = 'none';
+        btn.innerHTML = `<i class='bx bx-map-pin'></i> View Route Map`;
+        return;
+      }
+
+      container.style.display = 'block';
+      btn.innerHTML = `<i class='bx bx-chevron-up'></i> Hide Route Map`;
+      container.innerHTML = `<p class="muted" style="padding: 10px;"><i class='bx bx-loader-alt bx-spin'></i> Loading trip details & map...</p>`;
+
+      try {
+        const res = await fetch(`/deliveries/${tripId}`);
+        if (!res.ok) throw new Error('Could not load delivery details.');
+        const tripDetails = await res.json();
+        await renderRouteMap(container, tripDetails);
+      } catch (err) {
+        container.innerHTML = `<p class="message error">${err.message}</p>`;
       }
     });
   }

@@ -58,7 +58,7 @@ router.post('/checkout', loginVerification, async (req, res) => {
   const { delivery_address, payment_method_id } = req.body || {};
 
   // Validate the address and the Downtown San Jose service area
-  const location = checkAddress(delivery_address);
+  const location = await checkAddress(delivery_address);
   if (location.error) {
     return res.status(location.status).json({ error: location.error });
   }
@@ -239,11 +239,16 @@ router.get('/orders', loginVerification, async (req, res) => {
     const user = req.session.user;
     if (user.role === 'customer') {
       const [orders] = await pool.query(`
-        SELECT order_id, user_id, subtotal, total_weight, delivery_fee, tax_amount,
-               total_price, delivery_address, status, created_at, updated_at
-        FROM Orders
-        WHERE user_id = ?
-        ORDER BY created_at DESC
+        SELECT o.order_id, o.user_id, o.subtotal, o.total_weight, o.delivery_fee, o.tax_amount,
+               o.total_price, o.delivery_address, o.delivery_lat, o.delivery_lng, o.status,
+               o.created_at, o.updated_at,
+               do.delivery_id, do.stop_sequence, do.estimated_arrival,
+               d.robot, d.delivery_status
+        FROM Orders AS o
+        LEFT JOIN DeliveryOrders AS do ON o.order_id = do.order_id
+        LEFT JOIN Deliveries AS d ON do.delivery_id = d.delivery_id
+        WHERE o.user_id = ?
+        ORDER BY o.created_at DESC
       `, [user.user_id]);
       return res.json(orders);
     }
@@ -252,9 +257,14 @@ router.get('/orders', loginVerification, async (req, res) => {
     const [orders] = await pool.query(`
       SELECT o.order_id, o.user_id, u.name AS customer, u.email AS customer_email,
              o.subtotal, o.total_weight, o.delivery_fee, o.tax_amount,
-             o.total_price, o.delivery_address, o.status, o.created_at, o.updated_at
+             o.total_price, o.delivery_address, o.delivery_lat, o.delivery_lng, o.status,
+             o.created_at, o.updated_at,
+             do.delivery_id, do.stop_sequence, do.estimated_arrival,
+             d.robot, d.delivery_status
       FROM Orders AS o
       JOIN Users AS u ON o.user_id = u.user_id
+      LEFT JOIN DeliveryOrders AS do ON o.order_id = do.order_id
+      LEFT JOIN Deliveries AS d ON do.delivery_id = d.delivery_id
       ORDER BY o.created_at DESC
     `);
     res.json(orders);
@@ -271,9 +281,13 @@ router.get('/orders/:id', loginVerification, async (req, res) => {
     const orderId = Number(req.params.id);
 
     const [orderRows] = await pool.query(`
-      SELECT o.*, u.name AS customer_name, u.email AS customer_email
+      SELECT o.*, u.name AS customer_name, u.email AS customer_email,
+             do.delivery_id, do.stop_sequence, do.estimated_arrival,
+             d.robot, d.delivery_status
       FROM Orders AS o
       JOIN Users AS u ON o.user_id = u.user_id
+      LEFT JOIN DeliveryOrders AS do ON o.order_id = do.order_id
+      LEFT JOIN Deliveries AS d ON do.delivery_id = d.delivery_id
       WHERE o.order_id = ?
     `, [orderId]);
 

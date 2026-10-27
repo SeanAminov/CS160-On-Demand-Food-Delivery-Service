@@ -1,5 +1,6 @@
 import { money } from '../cart-api.js';
 import { getUser } from '../user.js';
+import { renderOrderTrackingMap } from '../route-map.js';
 
 export default {
   title: 'My Orders',
@@ -72,8 +73,27 @@ function renderOrders(app, orders) {
 
         <p style="font-size: 14px; margin: 4px 0 12px;"><b>Delivery Address:</b> ${order.delivery_address}</p>
 
-        <button class="button small toggle-items" data-id="${order.order_id}">View Order Items</button>
+        ${order.status === 'Out for Delivery' && order.robot ? `
+          <div style="background: #eef7f0; border-left: 4px solid #047857; padding: 8px 12px; border-radius: 4px; font-size: 13px; margin-bottom: 12px;">
+            <i class='bx bx-bot' style="color: #047857; font-size: 16px; vertical-align: middle;"></i>
+            Autonomous Delivery Robot: <b>${order.robot}</b> &bull; Stop <b>#${order.stop_sequence || 1}</b>
+            ${order.estimated_arrival ? `&bull; ETA: <b>${new Date(order.estimated_arrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>` : ''}
+          </div>
+        ` : ''}
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="button small toggle-items" data-id="${order.order_id}">View Order Items</button>
+          <button
+            class="button small ${order.status === 'Out for Delivery' ? 'primary' : ''} view-order-map"
+            data-id="${order.order_id}"
+            data-status="${order.status}"
+          >
+            <i class='bx bx-map-pin'></i> ${order.status === 'Out for Delivery' ? 'Track Live Robot Delivery' : 'View Delivery Map'}
+          </button>
+        </div>
+
         <div id="items-${order.order_id}" style="display: none; margin-top: 14px;"></div>
+        <div id="order-map-${order.order_id}" style="display: none; margin-top: 14px;"></div>
       </div>
     `;
   }
@@ -127,6 +147,35 @@ function renderOrders(app, orders) {
         btn.textContent = 'View Order Items';
       } finally {
         btn.disabled = false;
+      }
+    });
+  }
+
+  for (const btn of app.querySelectorAll('.view-order-map')) {
+    btn.addEventListener('click', async () => {
+      const orderId = Number(btn.dataset.id);
+      const status = btn.dataset.status;
+      const targetDiv = app.querySelector(`#order-map-${orderId}`);
+      if (!targetDiv) return;
+
+      const defaultLabel = `<i class='bx bx-map-pin'></i> ${status === 'Out for Delivery' ? 'Track Live Robot Delivery' : 'View Delivery Map'}`;
+
+      if (targetDiv.style.display === 'block') {
+        targetDiv.style.display = 'none';
+        btn.innerHTML = defaultLabel;
+        return;
+      }
+
+      targetDiv.style.display = 'block';
+      btn.innerHTML = `<i class='bx bx-chevron-up'></i> Hide Delivery Map`;
+      targetDiv.innerHTML = `<p class="muted" style="padding: 10px;"><i class='bx bx-loader-alt bx-spin'></i> Loading delivery map...</p>`;
+
+      try {
+        const order = orders.find((o) => o.order_id === orderId);
+        if (!order) throw new Error('Order details not found.');
+        await renderOrderTrackingMap(targetDiv, order);
+      } catch (err) {
+        targetDiv.innerHTML = `<p class="message error">${err.message}</p>`;
       }
     });
   }

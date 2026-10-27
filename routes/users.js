@@ -134,7 +134,7 @@ router.get('/profile/address', loginVerification, async (req, res) => {
 
 // Saves a new delivery address, as long as it's one we deliver to
 router.put('/profile/address', loginVerification, async (req, res) => {
-    const location = checkAddress(req.body);
+    const location = await checkAddress(req.body);
     if (location.error){
         return res.status(location.status).json({error: location.error});
     }
