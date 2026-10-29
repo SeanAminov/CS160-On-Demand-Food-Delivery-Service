@@ -9,6 +9,20 @@ export default {
     const role = user ? user.role : '';
 
     app.innerHTML = `
+     <div class="hero-slide">
+        <img id="slide-body"
+          src="/images/OFS_Homepage_2.jpg"
+          alt="Organic Foods"
+        />
+        <button class="slide-arrow left"
+          id="prev-slide"
+          aria-label="Previous image">&#10094;
+        </button>
+        <button class="slide-arrow right"
+          id="next-slide"
+          aria-label="Next image">&#10095;
+        </button>
+     </div>
       <section class="hero">
         <h1>Organic groceries delivered in downtown San Jose</h1>
         <p>Order fresh fruit, vegetables, and pantry staples online. Delivery is free on orders under 20 pounds.</p>
@@ -41,5 +55,27 @@ export default {
         </div>
       ` : ''}
     `;
+    const images = [
+      '/images/OFS_Homepage_2.jpg',
+      '/images/OFS_Homepage.webp',
+      '/images/OFS_Homepage_3.jpg'
+    ];
+
+    let currentSlide = 0;
+
+    const slide = app.querySelector('#slide-body');
+
+    function showSlide(index) {
+      currentSlide = (index + images.length) % images.length;
+      slide.src = images[currentSlide];
+    }
+
+    app.querySelector('#prev-slide').addEventListener('click', () => {
+      showSlide(currentSlide - 1);
+    });
+
+    app.querySelector('#next-slide').addEventListener('click', () => {
+      showSlide(currentSlide + 1);
+    });
   },
 };
