@@ -1,3 +1,5 @@
+const { geocodeAddress, approximateLocation } = require('./maps');
+
 // Address rules shared by checkout and the My Account page.
 // We only deliver in downtown San Jose, so the city has to be San Jose,
 // the state has to be CA, and the ZIP code has to be one of these.
@@ -7,23 +9,6 @@ const DOWNTOWN_ZIPS = ['95110', '95112', '95113', '95116', '95192'];
 // This also keeps HTML out of the pages that show addresses to employees.
 const ADDRESS_TEXT = /^[\p{L}\d ,.#'\/-]+$/u;
 
-// Generate deterministic coordinates within Downtown San Jose service area
-// until the map is hooked up. Downtown center ~ (37.3352, -121.8811)
-function approximateLocation(address) {
-  let hash = 0;
-  for (let i = 0; i < address.length; i++) {
-    hash = (hash << 5) - hash + address.charCodeAt(i);
-    hash |= 0;
-  }
-  const latOffset = ((Math.abs(hash) % 1000) / 50000) * (hash % 2 === 0 ? 1 : -1);
-  const lngOffset = ((Math.abs(hash >> 3) % 1000) / 50000) * (hash % 2 === 0 ? 1 : -1);
-
-  return {
-    lat: Number((37.3352 + latOffset).toFixed(6)),
-    lng: Number((-121.8811 + lngOffset).toFixed(6))
-  };
-}
-
 function clean(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -31,7 +16,7 @@ function clean(value) {
 // Checks the address boxes someone filled in. If something is wrong, this gives back
 // the status code and error to send. If it's fine, it gives back the cleaned up parts,
 // the whole address on one line for the order, and its map location.
-function checkAddress(input) {
+async function checkAddress(input) {
   const fields = input || {};
   const parts = {
     street: clean(fields.street),
@@ -64,7 +49,13 @@ function checkAddress(input) {
   // The database keeps the whole address on one line
   const unitText = parts.unit ? `, ${parts.unit}` : '';
   const address = `${parts.street}${unitText}, San Jose, CA ${parts.zip}`;
-  return { parts, address, ...approximateLocation(address) };
+
+  try {
+    const coords = await geocodeAddress(address);
+    return { parts, address, lat: coords.lat, lng: coords.lng };
+  } catch (err) {
+    return { status: err.status || 422, error: err.message || 'Could not verify address location.' };
+  }
 }
 
 // Splits a saved address line back into the boxes on the page. Every line is

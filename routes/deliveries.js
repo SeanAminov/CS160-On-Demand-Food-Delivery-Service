@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { loginVerification, roleVerification } = require('../auth');
+const { getOptimizedRoute } = require('../maps');
 const router = express.Router();
 
 const MAX_TRIP_ORDERS = 10;
@@ -91,15 +92,10 @@ router.post('/deliveries/batches', loginVerification, roleVerification('employee
       return res.status(400).json({ error });
     }
 
-    // 3. Create the delivery trip and assign orders
-    // Estimated metrics (approx. 0.7 miles and 5-7 minutes per stop in Downtown San Jose)
-    const estimatedDistance = Number((selectedOrders.length * 0.75).toFixed(2));
-    const estimatedDuration = selectedOrders.length * 7;
-    const routeSummary = JSON.stringify({
-      store_hub: 'OFS Downtown San Jose Hub',
-      stops_count: selectedOrders.length,
-      addresses: selectedOrders.map(o => o.delivery_address)
-    });
+    // 3. Request optimized multi-stop round-trip route from Google Maps with departure traffic
+    const departureTime = new Date();
+    const routePlan = await getOptimizedRoute(selectedOrders, departureTime);
+    const routeSummary = JSON.stringify(routePlan.routeInformation);
 
     // Insert Deliveries record
     const [delivRes] = await conn.query(`
@@ -107,14 +103,12 @@ router.post('/deliveries/batches', loginVerification, roleVerification('employee
         delivery_status, robot, route_information, total_weight, order_count,
         estimated_duration, total_distance, departure_time
       ) VALUES ('Out for Delivery', ?, ?, ?, ?, ?, ?, NOW())
-    `, [robot, routeSummary, tripWeight, selectedOrders.length, estimatedDuration, estimatedDistance]);
+    `, [robot, routeSummary, tripWeight, selectedOrders.length, routePlan.totalDurationMinutes, routePlan.totalDistanceMiles]);
     const deliveryId = delivRes.insertId;
 
-    // Insert DeliveryOrders & update Orders status
-    for (let i = 0; i < selectedOrders.length; i++) {
-      const order = selectedOrders[i];
-      const stopSeq = i + 1;
-      const estMinutes = (i + 1) * 7;
+    // Insert DeliveryOrders in optimized sequence & update Orders status
+    for (const item of routePlan.orderedStops) {
+      const { order, stop_sequence: stopSeq, estimated_arrival_minutes: estMinutes } = item;
 
       await conn.query(`
         INSERT INTO DeliveryOrders (delivery_id, order_id, stop_sequence, estimated_arrival)
@@ -139,13 +133,17 @@ router.post('/deliveries/batches', loginVerification, roleVerification('employee
       robot,
       order_count: selectedOrders.length,
       total_weight: tripWeight,
-      estimated_duration_mins: estimatedDuration,
-      total_distance_miles: estimatedDistance,
-      orders: selectedOrders.map((o, idx) => ({
-        order_id: o.order_id,
-        stop_sequence: idx + 1,
-        weight: o.total_weight,
-        address: o.delivery_address
+      estimated_duration_mins: routePlan.totalDurationMinutes,
+      total_distance_miles: routePlan.totalDistanceMiles,
+      route: routePlan.routeInformation,
+      orders: routePlan.orderedStops.map((item) => ({
+        order_id: item.order.order_id,
+        stop_sequence: item.stop_sequence,
+        estimated_arrival_minutes: item.estimated_arrival_minutes,
+        weight: item.order.total_weight,
+        address: item.order.delivery_address,
+        lat: item.order.delivery_lat,
+        lng: item.order.delivery_lng
       }))
     });
   } catch (err) {
@@ -174,6 +172,13 @@ router.get('/deliveries', loginVerification, roleVerification('employee', 'manag
   }
 });
 
+// GET /maps-key
+// The frontend map needs the Google Maps API key to load the Google Maps JavaScript API.
+// It's safe for the browser to see the public maps key.
+router.get('/maps-key', (req, res) => {
+  res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY || null });
+});
+
 // GET /deliveries/:id (Role: Customer [if their order is in trip], Employee, Manager)
 router.get('/deliveries/:id', loginVerification, async (req, res) => {
   try {
@@ -187,7 +192,7 @@ router.get('/deliveries/:id', loginVerification, async (req, res) => {
 
     const [orderRows] = await pool.query(`
       SELECT do.stop_sequence, do.estimated_arrival,
-             o.order_id, o.user_id, o.total_weight, o.delivery_address, o.status,
+             o.order_id, o.user_id, o.total_weight, o.delivery_address, o.delivery_lat, o.delivery_lng, o.status,
              u.name AS customer_name
       FROM DeliveryOrders AS do
       JOIN Orders AS o ON do.order_id = o.order_id
@@ -204,8 +209,16 @@ router.get('/deliveries/:id', loginVerification, async (req, res) => {
       }
     }
 
+    let parsedRoute = null;
+    try {
+      parsedRoute = delivRows[0].route_information ? JSON.parse(delivRows[0].route_information) : null;
+    } catch {
+      parsedRoute = delivRows[0].route_information;
+    }
+
     res.json({
       ...delivRows[0],
+      route_parsed: parsedRoute,
       orders: orderRows
     });
   } catch (err) {
