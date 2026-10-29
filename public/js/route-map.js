@@ -145,8 +145,8 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
           </span>
         </div>
         <div style="font-size: 13px; text-align: right;">
-          <div>Est. Distance: <b>${trip.total_distance || 0} mi</b></div>
-          <div>Est. Duration: <b>${trip.estimated_duration || 0} mins</b> (with traffic)</div>
+          <div>Est. Distance: <b>${trip.total_distance || trip.total_distance_miles || 0} mi</b></div>
+          <div>Est. Duration: <b>${trip.estimated_duration || trip.estimated_duration_mins || 0} mins</b> (with traffic)</div>
         </div>
       </div>
 

@@ -15,6 +15,8 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+let pageListeners = null;
+
 export function setupFilters(app, products){
     const grid = app.querySelector('.grid');
     const heading = app.querySelector('h1');
@@ -27,7 +29,7 @@ export function setupFilters(app, products){
         card,
         product,
         index,
-        searchText: [product.name, product.description, product.cetagory]
+        searchText: [product.name, product.description, product.category]
             .join(' ')
             .toLowerCase()
         };
@@ -149,6 +151,11 @@ export function setupFilters(app, products){
         setOpen(!sidebar.classList.contains('open'));
     });
 
+    // These two listen on the whole page, so opening the Shop again would add
+    // another copy each time. Remove the old ones before adding new ones.
+    if (pageListeners) pageListeners.abort();
+    pageListeners = new AbortController();
+
     document.addEventListener('click', (event) => {
         if (
         sidebar.classList.contains('open') &&
@@ -157,11 +164,11 @@ export function setupFilters(app, products){
         ) {
         setOpen(false);
         }
-    });
+    }, { signal: pageListeners.signal });
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') setOpen(false);
-    });
+    }, { signal: pageListeners.signal });
 }
 
 

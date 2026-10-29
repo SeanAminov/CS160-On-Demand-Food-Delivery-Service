@@ -1,5 +1,3 @@
-// TODO: filter by category (fruits, vegetables, pantry)
-
 import { cartRequest, money } from '../cart-api.js';
 import {setupFilters} from './catalog-filters.js';
 

@@ -1342,7 +1342,7 @@ main:has(.order-management-card) {
 }
 
 @media (max-width: 700px) {
-  .hero-carousel {
+  .hero-slide {
     height: 240px;
   }
 }
