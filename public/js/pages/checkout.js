@@ -211,7 +211,7 @@ function renderConfirmation(app, order) {
     </div>
 
     <div class="buttons">
-      <a class="button primary" href="#/orders">View My Orders</a>
+      <a class="button primary" href="#/orders"><i class='bx bx-map-pin'></i> Track Order & Delivery Map</a>
       <a class="button" href="#/catalog">Continue Shopping</a>
     </div>
   `;

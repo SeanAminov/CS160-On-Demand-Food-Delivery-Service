@@ -1536,3 +1536,143 @@ main:has(.order-management-card) {
   transform: scale(1.15);
   z-index: 1000 !important;
 }
+
+/* Live Delivery Tracking Stepper & Badges */
+.order-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 0 16px;
+  position: relative;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.stepper-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  min-width: 65px;
+}
+
+.stepper-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #cbd5e1;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.stepper-step.completed .stepper-circle {
+  background: #047857;
+  border-color: #047857;
+  color: #ffffff;
+}
+
+.stepper-step.active .stepper-circle {
+  background: #ffffff;
+  border-color: #047857;
+  color: #047857;
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.25);
+  font-weight: bold;
+}
+
+.stepper-label {
+  font-size: 11px;
+  margin-top: 6px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.stepper-step.completed .stepper-label {
+  color: #047857;
+  font-weight: 600;
+}
+
+.stepper-step.active .stepper-label {
+  color: #047857;
+  font-weight: bold;
+}
+
+.stepper-line {
+  flex: 1;
+  height: 2px;
+  background: #e2e8f0;
+  margin: 0 4px;
+  position: relative;
+  top: -10px;
+  z-index: 1;
+}
+
+.stepper-line.completed {
+  background: #047857;
+}
+
+/* Pulsing Live Dot */
+.live-pulse-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+  animation: live-pulse-animation 1.5s infinite;
+}
+
+@keyframes live-pulse-animation {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(22, 163, 74, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
+}
+
+.route-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+/* Robot Map Marker */
+.custom-map-pin.robot-pin {
+  background: #ffffff;
+  border: 2px solid #047857;
+  box-shadow: 0 2px 8px rgba(4, 120, 87, 0.4);
+  font-size: 16px;
+  animation: robot-bounce 2s infinite ease-in-out;
+  z-index: 1001 !important;
+}
+
+@keyframes robot-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}

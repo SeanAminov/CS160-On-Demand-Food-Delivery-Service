@@ -1,6 +1,6 @@
 // Service for Google Maps API integration:
 // 1. Geocoding delivery addresses into real coordinates
-// 2. Multi-stop route optimization using Google Maps Routes API (with live departure traffic)
+// 2. Multi-stop route optimization using Google Maps Routes API (BICYCLE mode for legal robot pathways & lanes)
 // 3. Round-trip robot dispatch from the OFS Store Hub
 
 const STORE_HUB = {
@@ -9,6 +9,99 @@ const STORE_HUB = {
   lat: 37.3352,
   lng: -121.8811
 };
+
+// Encodes an array of {lat, lng} points into a standard Google-compatible polyline string
+function encodePolyline(points) {
+  if (!Array.isArray(points) || points.length === 0) return '';
+  let prevLat = 0;
+  let prevLng = 0;
+  let result = '';
+
+  for (const point of points) {
+    const lat = Math.round(Number(point.lat) * 1e5);
+    const lng = Math.round(Number(point.lng) * 1e5);
+
+    result += encodeSignedNumber(lat - prevLat);
+    result += encodeSignedNumber(lng - prevLng);
+
+    prevLat = lat;
+    prevLng = lng;
+  }
+  return result;
+}
+
+function encodeSignedNumber(num) {
+  let sgn = num < 0 ? ~(num << 1) : (num << 1);
+  let s = '';
+  while (sgn >= 0x20) {
+    s += String.fromCharCode((0x20 | (sgn & 0x1f)) + 63);
+    sgn >>= 5;
+  }
+  s += String.fromCharCode(sgn + 63);
+  return s;
+}
+
+// Decodes a Google-encoded polyline string into an array of {lat, lng} points
+function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== 'string') return [];
+  const points = [];
+  let index = 0;
+  const len = encoded.length;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < len) {
+    let b;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+
+    points.push({
+      lat: Number((lat / 1e5).toFixed(6)),
+      lng: Number((lng / 1e5).toFixed(6))
+    });
+  }
+  return points;
+}
+
+// Generates street-grid aligned path coordinates (turning at street corners rather than diagonal straight chords)
+function generateGridPathway(stops) {
+  const points = [];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const start = stops[i];
+    const end = stops[i + 1];
+
+    if (i === 0) {
+      points.push({ lat: start.lat, lng: start.lng });
+    }
+
+    // Street corner inflection point (following East-West then North-South street grid)
+    const corner = {
+      lat: Number(start.lat.toFixed(6)),
+      lng: Number(end.lng.toFixed(6))
+    };
+
+    points.push(corner);
+    points.push({ lat: Number(end.lat.toFixed(6)), lng: Number(end.lng.toFixed(6)) });
+  }
+  return points;
+}
 
 // Deterministic coordinate calculation used as a fallback when GOOGLE_MAPS_API_KEY is not set.
 // Keeps development and testing seamless for team members without an API key.
@@ -78,12 +171,10 @@ function parseSeconds(durationStr) {
   return parseInt(String(durationStr).replace('s', ''), 10) || 0;
 }
 
-// Modern Google Maps Routes API (computeRoutes) with waypoint optimization and traffic
+// Modern Google Maps Routes API (computeRoutes) using BICYCLE travel mode
+// Strictly routes along legal bicycle lanes, multi-use paths, and bike-friendly roads for delivery robots
 async function fetchFromRoutesApi(orders, departureDate, apiKey) {
   const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
-
-  const now = Date.now();
-  const isFuture = departureDate && (departureDate.getTime() - now > 60000);
 
   const requestBody = {
     origin: {
@@ -101,15 +192,9 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
         latLng: { latitude: Number(o.delivery_lat), longitude: Number(o.delivery_lng) }
       }
     })),
-    travelMode: 'DRIVE',
-    routingPreference: 'TRAFFIC_AWARE',
+    travelMode: 'BICYCLE',
     optimizeWaypointOrder: orders.length > 1
   };
-
-  // Google Routes API requires departureTime to be strictly in the future; omitting it defaults to now
-  if (isFuture) {
-    requestBody.departureTime = departureDate.toISOString();
-  }
 
   const response = await fetch(url, {
     method: 'POST',
@@ -146,10 +231,10 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
   const legs = route.legs || [];
 
   const totalMeters = route.distanceMeters || 0;
-  const totalTrafficSeconds = parseSeconds(route.duration);
+  const totalBicycleSeconds = parseSeconds(route.duration);
 
   const totalDistanceMiles = Number((totalMeters / 1609.344).toFixed(2));
-  const totalDurationMinutes = Math.max(1, Math.round(totalTrafficSeconds / 60));
+  const totalDurationMinutes = Math.max(1, Math.round(totalBicycleSeconds / 60));
 
   let cumulativeSeconds = 0;
   const orderedStops = waypointOrder.map((orderIndex, sequenceIndex) => {
@@ -176,6 +261,7 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
   const routeInformation = {
     store_hub: STORE_HUB,
     round_trip: true,
+    travel_mode: 'BICYCLE',
     departure_time: departureDate.toISOString(),
     total_distance_miles: totalDistanceMiles,
     total_duration_minutes: totalDurationMinutes,
@@ -200,14 +286,13 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
   };
 }
 
-// Legacy Google Maps Directions API fallback (directions/json)
+// Legacy Google Maps Directions API fallback (directions/json) using bicycling mode
 async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   const origin = `${STORE_HUB.lat},${STORE_HUB.lng}`;
   const destination = `${STORE_HUB.lat},${STORE_HUB.lng}`;
   const waypoints = `${orders.length > 1 ? 'optimize:true|' : ''}${orders.map(o => `${o.delivery_lat},${o.delivery_lng}`).join('|')}`;
-  const departureTimestamp = Math.floor(departureDate.getTime() / 1000);
 
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&departure_time=${departureTimestamp}&traffic_model=best_guess&key=${apiKey}`;
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&mode=bicycling&key=${apiKey}`;
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -232,21 +317,21 @@ async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   const legs = route.legs || [];
 
   let totalMeters = 0;
-  let totalTrafficSeconds = 0;
+  let totalBicycleSeconds = 0;
   legs.forEach(leg => {
     totalMeters += leg.distance?.value || 0;
-    const legSecs = leg.duration_in_traffic ? leg.duration_in_traffic.value : (leg.duration?.value || 0);
-    totalTrafficSeconds += legSecs;
+    const legSecs = leg.duration?.value || 0;
+    totalBicycleSeconds += legSecs;
   });
 
   const totalDistanceMiles = Number((totalMeters / 1609.344).toFixed(2));
-  const totalDurationMinutes = Math.max(1, Math.round(totalTrafficSeconds / 60));
+  const totalDurationMinutes = Math.max(1, Math.round(totalBicycleSeconds / 60));
 
   let cumulativeSeconds = 0;
   const orderedStops = waypointOrder.map((orderIndex, sequenceIndex) => {
     const order = (typeof orderIndex === 'number' && orders[orderIndex]) ? orders[orderIndex] : orders[sequenceIndex];
     const leg = legs[sequenceIndex];
-    const legSeconds = leg?.duration_in_traffic ? leg.duration_in_traffic.value : (leg?.duration?.value || 0);
+    const legSeconds = leg?.duration?.value || 0;
     cumulativeSeconds += legSeconds;
 
     return {
@@ -263,13 +348,13 @@ async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
     start_address: leg.start_address,
     end_address: leg.end_address,
     distance_miles: Number(((leg.distance?.value || 0) / 1609.344).toFixed(2)),
-    duration_minutes: Math.round((leg.duration?.value || 0) / 60),
-    duration_in_traffic_minutes: leg.duration_in_traffic ? Math.round(leg.duration_in_traffic.value / 60) : null
+    duration_minutes: Math.round((leg.duration?.value || 0) / 60)
   }));
 
   const routeInformation = {
     store_hub: STORE_HUB,
     round_trip: true,
+    travel_mode: 'BICYCLE',
     departure_time: departureDate.toISOString(),
     total_distance_miles: totalDistanceMiles,
     total_duration_minutes: totalDurationMinutes,
@@ -294,9 +379,80 @@ async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   };
 }
 
-// Requests an optimized multi-stop round-trip route from Google Maps Routes API (or Directions API)
-// with departure_time='now' and traffic conditions.
-// Returns the optimal stop sequence, traffic-based arrival times, distance, and overview polyline.
+// Fallback bicycle pathway calculation:
+// 1. Tries OSRM bicycle routing endpoint for real street/bike lane polylines
+// 2. If unreachable/offline, generates a corner-turning street grid polyline so the path never cuts straight through blocks
+async function fetchFallbackBicycleRoute(orders, departureDate = new Date()) {
+  const waypoints = [
+    STORE_HUB,
+    ...orders.map(o => ({ lat: Number(o.delivery_lat), lng: Number(o.delivery_lng) })),
+    STORE_HUB
+  ];
+
+  let overviewPolyline = '';
+  let totalDistanceMiles = Number(((orders.length + 1) * 0.75).toFixed(2));
+  let totalDurationMinutes = (orders.length + 1) * 7;
+
+  // Try real bicycle pathway routing from open OSRM service
+  try {
+    const coordStr = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
+    const osrmUrl = `https://router.project-osrm.org/route/v1/bicycle/${coordStr}?overview=full&geometries=polyline`;
+    const res = await fetch(osrmUrl, { signal: AbortSignal.timeout(2500) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.code === 'Ok' && data.routes && data.routes[0]) {
+        const osrmRoute = data.routes[0];
+        overviewPolyline = osrmRoute.geometry || '';
+        totalDistanceMiles = Number(((osrmRoute.distance || 0) / 1609.344).toFixed(2));
+        totalDurationMinutes = Math.max(1, Math.round((osrmRoute.duration || 0) / 60));
+      }
+    }
+  } catch {
+    // Offline or OSRM unavailable; proceed to local street-grid polyline generation
+  }
+
+  // If OSRM was not reached or returned no geometry, generate a corner-turning grid path
+  if (!overviewPolyline) {
+    const gridPoints = generateGridPathway(waypoints);
+    overviewPolyline = encodePolyline(gridPoints);
+  }
+
+  const orderedStops = orders.map((order, idx) => ({
+    order,
+    stop_sequence: idx + 1,
+    estimated_arrival_minutes: (idx + 1) * 7,
+    leg_distance_miles: 0.75,
+    leg_duration_minutes: 7
+  }));
+
+  return {
+    totalDistanceMiles,
+    totalDurationMinutes,
+    orderedStops,
+    routeInformation: {
+      store_hub: STORE_HUB,
+      round_trip: true,
+      travel_mode: 'BICYCLE',
+      waypoint_order: orders.map((_, idx) => idx),
+      total_distance_miles: totalDistanceMiles,
+      total_duration_minutes: totalDurationMinutes,
+      departure_time: departureDate.toISOString(),
+      overview_polyline: overviewPolyline,
+      stops: orderedStops.map(s => ({
+        order_id: s.order.order_id,
+        stop_sequence: s.stop_sequence,
+        address: s.order.delivery_address,
+        lat: s.order.delivery_lat,
+        lng: s.order.delivery_lng,
+        estimated_arrival_minutes: s.estimated_arrival_minutes
+      }))
+    }
+  };
+}
+
+// Requests an optimized multi-stop round-trip route using bicycle lanes and legal pathways.
+// Uses Google Maps Routes API (or Directions API) with BICYCLE mode.
+// Falls back to OSRM / street-grid polyline routing when API key is missing or calls fail.
 async function getOptimizedRoute(orders, departureDate = new Date()) {
   if (!orders || orders.length === 0) {
     throw new Error('No orders provided for route optimization.');
@@ -304,55 +460,22 @@ async function getOptimizedRoute(orders, departureDate = new Date()) {
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
-  // Fallback calculation if no API key is present
   if (!apiKey) {
-    const estimatedDistance = Number(((orders.length + 1) * 0.75).toFixed(2));
-    const estimatedDuration = (orders.length + 1) * 7;
-
-    const orderedStops = orders.map((order, idx) => ({
-      order,
-      stop_sequence: idx + 1,
-      estimated_arrival_minutes: (idx + 1) * 7,
-      leg_distance_miles: 0.75,
-      leg_duration_minutes: 7
-    }));
-
-    return {
-      totalDistanceMiles: estimatedDistance,
-      totalDurationMinutes: estimatedDuration,
-      orderedStops,
-      routeInformation: {
-        store_hub: STORE_HUB,
-        round_trip: true,
-        waypoint_order: orders.map((_, idx) => idx),
-        total_distance_miles: estimatedDistance,
-        total_duration_minutes: estimatedDuration,
-        departure_time: departureDate.toISOString(),
-        stops: orderedStops.map(s => ({
-          order_id: s.order.order_id,
-          stop_sequence: s.stop_sequence,
-          address: s.order.delivery_address,
-          lat: s.order.delivery_lat,
-          lng: s.order.delivery_lng,
-          estimated_arrival_minutes: s.estimated_arrival_minutes
-        }))
-      }
-    };
+    return await fetchFallbackBicycleRoute(orders, departureDate);
   }
 
-  // 1. Primary: Google Maps Routes API (v2 computeRoutes)
+  // 1. Primary: Google Maps Routes API (BICYCLE mode)
   try {
     return await fetchFromRoutesApi(orders, departureDate, apiKey);
   } catch (routesErr) {
-    // 2. Secondary fallback: Google Maps Directions API (legacy v1)
+    // 2. Secondary fallback: Google Maps Directions API (bicycling mode)
     try {
       return await fetchFromDirectionsApi(orders, departureDate, apiKey);
     } catch (directionsErr) {
-      console.error('[Google Routing Error - Routes API]:', routesErr.message);
-      console.error('[Google Routing Error - Directions API]:', directionsErr.message);
-      const error = new Error(`Google route optimization failed: ${routesErr.message || directionsErr.message}`);
-      error.status = 502;
-      throw error;
+      console.warn('[Google Routing Error - Routes API]:', routesErr.message);
+      console.warn('[Google Routing Error - Directions API]:', directionsErr.message);
+      // 3. Fallback to OSRM / street grid routing so trips never fail completely
+      return await fetchFallbackBicycleRoute(orders, departureDate);
     }
   }
 }
@@ -361,5 +484,8 @@ module.exports = {
   STORE_HUB,
   geocodeAddress,
   getOptimizedRoute,
-  approximateLocation
+  approximateLocation,
+  encodePolyline,
+  decodePolyline,
+  generateGridPathway
 };

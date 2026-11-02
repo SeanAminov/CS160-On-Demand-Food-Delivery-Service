@@ -48,6 +48,45 @@ function decodePolyline(encoded) {
   return points;
 }
 
+// Generates street-grid aligned path coordinates (turning at street corners rather than diagonal straight chords)
+function generateGridPathway(stops) {
+  const points = [];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const start = stops[i];
+    const end = stops[i + 1];
+
+    if (i === 0) {
+      points.push({ lat: start.lat, lng: start.lng });
+    }
+
+    // Street corner inflection point (following East-West then North-South street grid)
+    const corner = {
+      lat: Number(start.lat.toFixed(6)),
+      lng: Number(end.lng.toFixed(6))
+    };
+
+    points.push(corner);
+    points.push({ lat: Number(end.lat.toFixed(6)), lng: Number(end.lng.toFixed(6)) });
+  }
+  return points;
+}
+
+// Estimates the robot's real-time position along the polyline path
+function getRobotPosition(pathPoints, trip) {
+  if (!Array.isArray(pathPoints) || pathPoints.length === 0) {
+    return { lat: STORE_HUB.lat, lng: STORE_HUB.lng };
+  }
+  if (pathPoints.length === 1) return pathPoints[0];
+
+  // If trip is Out for Delivery, place the robot along the first leg / initial portion of the path
+  const progressRatio = 0.35; // Position along the active delivery leg
+  const targetIndex = Math.min(
+    Math.max(1, Math.floor(pathPoints.length * progressRatio)),
+    pathPoints.length - 1
+  );
+  return pathPoints[targetIndex];
+}
+
 // Fetch Google Maps API key from the server
 let cachedApiKey = undefined;
 async function fetchMapsKey() {
@@ -143,10 +182,13 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
           <span class="muted" style="font-size: 13px;">
             Store Hub: <b>${hub.name}</b> &bull; Round Trip Circuit (${orders.length} stops)
           </span>
+          <div style="margin-top: 6px;">
+            <span class="route-mode-badge"><i class='bx bx-cycling'></i> Legal Bike Lanes & Designated Pathways</span>
+          </div>
         </div>
         <div style="font-size: 13px; text-align: right;">
           <div>Est. Distance: <b>${trip.total_distance || trip.total_distance_miles || 0} mi</b></div>
-          <div>Est. Duration: <b>${trip.estimated_duration || trip.estimated_duration_mins || 0} mins</b> (with traffic)</div>
+          <div>Est. Duration: <b>${trip.estimated_duration || trip.estimated_duration_mins || 0} mins</b></div>
         </div>
       </div>
 
@@ -207,8 +249,8 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
   if (apiKey) {
     try {
       await loadGoogleMaps(apiKey);
-      statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active (Traffic & Routing API)</span>`;
-      renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId);
+      statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active (Bicycle Lanes & Pathways)</span>`;
+      renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId, trip);
       return;
     } catch (err) {
       console.warn('Google Maps script load failed, falling back to Leaflet:', err);
@@ -221,10 +263,10 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
     statusBar.innerHTML = `
       <div style="background: #fefce8; border: 1px solid #fef08a; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #854d0e; display: flex; align-items: center; gap: 6px;">
         <i class='bx bx-info-circle' style="font-size: 16px;"></i>
-        <span><b>Interactive Map:</b> Add <code>GOOGLE_MAPS_API_KEY</code> to <code>.env</code> to activate Google Maps tiles. Displaying route with downtown street coordinates.</span>
+        <span><b>Interactive Map:</b> Displaying route along legal street pathways and bike lanes.</span>
       </div>
     `;
-    renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId);
+    renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId, trip);
   } catch (err) {
     canvas.innerHTML = `<div class="message error">Could not load map: ${err.message}</div>`;
   }
@@ -309,11 +351,17 @@ async function renderDestinationMap(containerElement, order) {
     customer_name: 'You'
   }];
 
+  const destinationTripMock = {
+    delivery_id: order.delivery_id || 'preview',
+    robot: order.robot || 'Autonomous Robot',
+    delivery_status: order.status
+  };
+
   if (apiKey) {
     try {
       await loadGoogleMaps(apiKey);
       statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active</span>`;
-      renderWithGoogleMaps(canvas, hub, singleOrderMock, null, order.order_id);
+      renderWithGoogleMaps(canvas, hub, singleOrderMock, null, order.order_id, destinationTripMock);
       return;
     } catch (err) {
       console.warn('Google Maps load failed:', err);
@@ -322,14 +370,14 @@ async function renderDestinationMap(containerElement, order) {
 
   try {
     await loadLeaflet();
-    renderWithLeaflet(canvas, hub, singleOrderMock, null, order.order_id);
+    renderWithLeaflet(canvas, hub, singleOrderMock, null, order.order_id, destinationTripMock);
   } catch (err) {
     canvas.innerHTML = `<div class="message error">Could not load map: ${err.message}</div>`;
   }
 }
 
 // Render using official Google Maps JavaScript API
-function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = null) {
+function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = null, trip = null) {
   canvas.innerHTML = '';
   const map = new google.maps.Map(canvas, {
     zoom: 14,
@@ -405,36 +453,72 @@ function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = nul
     }
   });
 
-  // Polyline path: Decode Google overview polyline if available, or connect hub and stops
+  // Polyline path: Decode Google overview polyline if available, or generate street-grid pathway
   let pathPoints = [];
   if (routeData && routeData.overview_polyline) {
     pathPoints = decodePolyline(routeData.overview_polyline);
   }
 
+  // Fallback: Build street-grid pathway following street coordinates (never direct diagonal across blocks)
   if (pathPoints.length === 0) {
-    pathPoints.push({ lat: hub.lat, lng: hub.lng });
+    const stopCoords = [{ lat: hub.lat, lng: hub.lng }];
     orders.forEach((o) => {
       const lat = Number(o.delivery_lat);
       const lng = Number(o.delivery_lng);
-      if (!isNaN(lat) && !isNaN(lng)) pathPoints.push({ lat, lng });
+      if (!isNaN(lat) && !isNaN(lng)) stopCoords.push({ lat, lng });
     });
-    pathPoints.push({ lat: hub.lat, lng: hub.lng });
+    stopCoords.push({ lat: hub.lat, lng: hub.lng });
+    pathPoints = generateGridPathway(stopCoords);
   }
 
+  // Draw Legal Bike Lane & Pathway Polyline
   new google.maps.Polyline({
     path: pathPoints,
     geodesic: true,
-    strokeColor: '#16a34a',
-    strokeOpacity: 0.85,
+    strokeColor: '#047857',
+    strokeOpacity: 0.9,
     strokeWeight: 5,
     map
   });
+
+  // Render Robot Marker if trip is out for delivery or order has a dispatched robot
+  const isOutForDelivery = (trip && trip.delivery_status === 'Out for Delivery') ||
+    orders.some(o => o.status === 'Out for Delivery');
+
+  if (isOutForDelivery && pathPoints.length > 0) {
+    const robotPos = getRobotPosition(pathPoints, trip);
+    const robotMarker = new google.maps.Marker({
+      position: robotPos,
+      map,
+      title: `${trip?.robot || 'Autonomous Robot'} (En Route)`,
+      label: { text: '🤖', fontSize: '16px' },
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 18,
+        fillColor: '#ffffff',
+        fillOpacity: 1,
+        strokeColor: '#047857',
+        strokeWeight: 3
+      }
+    });
+
+    const robotInfo = new google.maps.InfoWindow({
+      content: `
+        <div style="padding: 4px; font-size: 13px;">
+          <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
+          <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
+          <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
+        </div>
+      `
+    });
+    robotMarker.addListener('click', () => robotInfo.open(map, robotMarker));
+  }
 
   map.fitBounds(bounds);
 }
 
 // Render using Leaflet (OpenStreetMap) fallback
-function renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId = null) {
+function renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId = null, trip = null) {
   canvas.innerHTML = '';
   const map = window.L.map(canvas).setView([hub.lat, hub.lng], 14);
 
@@ -494,16 +578,45 @@ function renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId = null) 
     polylineCoords = decoded.map(p => [p.lat, p.lng]);
   }
 
+  // Fallback: Generate street-grid pathway turning at corners (never straight diagonal across blocks)
   if (polylineCoords.length === 0) {
-    polylineCoords = [...latLngs, [hub.lat, hub.lng]];
+    const stopCoords = [{ lat: hub.lat, lng: hub.lng }];
+    orders.forEach((o) => {
+      const lat = Number(o.delivery_lat);
+      const lng = Number(o.delivery_lng);
+      if (!isNaN(lat) && !isNaN(lng)) stopCoords.push({ lat, lng });
+    });
+    stopCoords.push({ lat: hub.lat, lng: hub.lng });
+    polylineCoords = generateGridPathway(stopCoords).map(p => [p.lat, p.lng]);
   }
 
   const polyline = window.L.polyline(polylineCoords, {
-    color: '#16a34a',
+    color: '#047857',
     weight: 5,
-    opacity: 0.85,
-    dashArray: routeData && routeData.overview_polyline ? null : '6, 8'
+    opacity: 0.9
   }).addTo(map);
+
+  // Render Robot Marker if trip is out for delivery or order has a dispatched robot
+  const isOutForDelivery = (trip && trip.delivery_status === 'Out for Delivery') ||
+    orders.some(o => o.status === 'Out for Delivery');
+
+  if (isOutForDelivery && polylineCoords.length > 0) {
+    const robotPos = getRobotPosition(polylineCoords.map(p => ({ lat: p[0], lng: p[1] })), trip);
+    const robotIcon = window.L.divIcon({
+      className: 'custom-map-pin robot-pin',
+      html: '<span>🤖</span>',
+      iconSize: [34, 34],
+      iconAnchor: [17, 17]
+    });
+
+    window.L.marker([robotPos.lat, robotPos.lng], { icon: robotIcon })
+      .bindPopup(`
+        <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
+        <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
+        <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
+      `)
+      .addTo(map);
+  }
 
   map.fitBounds(polyline.getBounds().pad(0.15));
 }

@@ -40,6 +40,51 @@ function getStatusBadge(status) {
   return `<span style="display: inline-block; padding: 4px 10px; border-radius: 12px; background: ${color}1a; color: ${color}; border: 1px solid ${color}; font-weight: bold; font-size: 13px;">${status}</span>`;
 }
 
+// 5-step visual order journey stepper
+function renderProgressStepper(status) {
+  if (status === 'Cancelled' || status === 'Failed') {
+    return `
+      <div style="padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b; font-size: 13px; margin: 10px 0;">
+        <i class='bx bx-x-circle' style="vertical-align: middle;"></i> Order ${status}
+      </div>
+    `;
+  }
+
+  const steps = [
+    { key: 'Pending', label: 'Order Placed' },
+    { key: 'Preparing', label: 'Packing' },
+    { key: 'Staged', label: 'Staged' },
+    { key: 'Out for Delivery', label: 'En Route' },
+    { key: 'Delivered', label: 'Delivered' }
+  ];
+
+  const currentIdx = steps.findIndex(s => s.key === status);
+  const activeIndex = currentIdx >= 0 ? currentIdx : 0;
+
+  return `
+    <div class="order-stepper">
+      ${steps.map((step, idx) => {
+        const isCompleted = idx < activeIndex || status === 'Delivered';
+        const isCurrent = idx === activeIndex && status !== 'Delivered';
+        const stateClass = isCompleted ? 'completed' : (isCurrent ? 'active' : 'upcoming');
+        const icon = isCompleted ? "<i class='bx bx-check'></i>" : String(idx + 1);
+
+        const connector = idx < steps.length - 1
+          ? `<div class="stepper-line ${idx < activeIndex || status === 'Delivered' ? 'completed' : ''}"></div>`
+          : '';
+
+        return `
+          <div class="stepper-step ${stateClass}">
+            <div class="stepper-circle">${icon}</div>
+            <div class="stepper-label">${step.label}</div>
+          </div>
+          ${connector}
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function renderOrders(app, orders) {
   if (orders.length === 0) {
     app.innerHTML = `
@@ -48,6 +93,43 @@ function renderOrders(app, orders) {
       <a class="button primary" href="#/catalog">Shop Now</a>
     `;
     return;
+  }
+
+  const activeDeliveryOrder = orders.find(o => o.status === 'Out for Delivery');
+  let heroTrackerHtml = '';
+
+  if (activeDeliveryOrder) {
+    const etaStr = activeDeliveryOrder.estimated_arrival
+      ? new Date(activeDeliveryOrder.estimated_arrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'In Transit';
+
+    heroTrackerHtml = `
+      <section class="card live-tracker-hero" style="border: 2px solid #047857; background: #f0fdf4; margin-bottom: 24px; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="live-pulse-dot"></span>
+            <strong style="color: #047857; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Live Robot Delivery Active</strong>
+          </div>
+          <div style="font-size: 13px; color: #166534;">
+            Autonomous Robot: <b>${activeDeliveryOrder.robot || 'Robot 1'}</b> &bull; Stop <b>#${activeDeliveryOrder.stop_sequence || 1}</b>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <h2 style="margin: 0 0 6px; font-size: 20px; color: #14532d;">Order #${activeDeliveryOrder.order_id} is En Route!</h2>
+          <p style="margin: 0; color: #166534; font-size: 14px;">
+            Our autonomous robot is traveling on designated bike lanes and pedestrian pathways to <b>${activeDeliveryOrder.delivery_address}</b>.
+            ${activeDeliveryOrder.estimated_arrival ? `Estimated Arrival: <b>${etaStr}</b>.` : ''}
+          </p>
+        </div>
+
+        ${renderProgressStepper(activeDeliveryOrder.status)}
+
+        <div id="hero-live-map-${activeDeliveryOrder.order_id}" style="margin-top: 14px;">
+          <div class="muted" style="padding: 16px; text-align: center;"><i class='bx bx-loader-alt bx-spin'></i> Loading live tracking map...</div>
+        </div>
+      </section>
+    `;
   }
 
   let cards = '';
@@ -63,7 +145,9 @@ function renderOrders(app, orders) {
           <div>${getStatusBadge(order.status)}</div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; font-size: 14px; margin-bottom: 12px; background: #fafcfa; padding: 10px; border-radius: 6px;">
+        ${renderProgressStepper(order.status)}
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; font-size: 14px; margin: 12px 0; background: #fafcfa; padding: 10px; border-radius: 6px;">
           <div>Subtotal: <b>${money(order.subtotal)}</b></div>
           <div>Weight: <b>${order.total_weight} lb</b></div>
           <div>Delivery Fee: <b>${money(order.delivery_fee)}</b></div>
@@ -88,7 +172,7 @@ function renderOrders(app, orders) {
             data-id="${order.order_id}"
             data-status="${order.status}"
           >
-            <i class='bx bx-map-pin'></i> ${order.status === 'Out for Delivery' ? 'Track Live Robot Delivery' : 'View Delivery Map'}
+            <i class='bx bx-map-pin'></i> ${order.status === 'Out for Delivery' ? 'View Live Tracking Map' : 'Preview Delivery Route'}
           </button>
         </div>
 
@@ -101,8 +185,17 @@ function renderOrders(app, orders) {
   app.innerHTML = `
     <h1>My Orders</h1>
     <p class="muted" style="margin-bottom: 24px;">Track your grocery deliveries from preparation to autonomous robot delivery.</p>
+    ${heroTrackerHtml}
     ${cards}
   `;
+
+  // Auto-render live tracking map for orders currently Out for Delivery
+  if (activeDeliveryOrder) {
+    const heroMap = app.querySelector(`#hero-live-map-${activeDeliveryOrder.order_id}`);
+    if (heroMap) {
+      renderOrderTrackingMap(heroMap, activeDeliveryOrder);
+    }
+  }
 
   for (const btn of app.querySelectorAll('.toggle-items')) {
     btn.addEventListener('click', async () => {
@@ -158,7 +251,7 @@ function renderOrders(app, orders) {
       const targetDiv = app.querySelector(`#order-map-${orderId}`);
       if (!targetDiv) return;
 
-      const defaultLabel = `<i class='bx bx-map-pin'></i> ${status === 'Out for Delivery' ? 'Track Live Robot Delivery' : 'View Delivery Map'}`;
+      const defaultLabel = `<i class='bx bx-map-pin'></i> ${status === 'Out for Delivery' ? 'View Live Tracking Map' : 'Preview Delivery Route'}`;
 
       if (targetDiv.style.display === 'block') {
         targetDiv.style.display = 'none';
