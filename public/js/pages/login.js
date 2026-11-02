@@ -14,12 +14,11 @@ export default {
       <div class="input-field"><input type="password" name="password" id="password" placeholder="Password" required><i class='bx bxs-lock-alt' ></i></div>
       <button class="button primary" type="submit">Log In</button>
       <div class="redirects">
-      <a class = "button">Forgot Password</a>
+      <a class = "button" href="#/forgot-password">Forgot Password</a>
       <a class = "button" href="#/register">Register Now</a>
       </div>
       <p id="error" style="color: red;"> </p>
       </form>
-      </div>
       `;
     const form = document.getElementById('login-form');  
     const error = document.getElementById('error');

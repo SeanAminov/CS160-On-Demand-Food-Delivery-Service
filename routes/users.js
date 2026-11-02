@@ -106,6 +106,55 @@ router.post('/logout', (req, res)=> {
     });
 });
 
+const resetCodes = new Map();
+router.post('/forgot-password/code', async(req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if(!email){
+        return res.status(400).json({error: 'Enter an email.'});
+    }
+    try{
+        const [users] = await pool.query('SELECT user_id FROM Users WHERE email = ?', [email]);
+        if (users.length === 0){
+            return res.status(404).json({error: 'Email not linked to an account.'});
+        }
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        resetCodes.set(email,code);
+        res.json({code});
+    }
+    catch(error){
+        console.error('Forgot Password Code Error: ', error);
+        res.status(500).json({error: 'Could not generate code.'});
+    }
+});
+
+router.post('/forgot-password/reset', async (req, res) =>{
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const code = String(req.body?.code || '').trim();
+    const password = String(req.body?.password || '');
+    if (!email || !code || !password){
+        return res.status(400).json({error: 'Fill in all fields.'});
+    }
+    if (password.length < 8){
+        return res.status(400).json({error: 'Password must be at least 8 characters.'})
+    }
+    if (password.length > 72){
+        return res.status(400).json({error: 'Password must be 72 characters or less.'})
+    }
+    if (resetCodes.get(email) !== code){
+        resetCodes.delete(email);
+        return res.status(400).json({error: 'Incorrect Code'});
+    }
+    try{
+        await pool.query('UPDATE Users SET password_hash = ? WHERE email = ?', [await hashPassword(password), email]);
+        resetCodes.delete(email);
+        res.json({message: 'Password reset.'});
+    }
+    catch(error){
+        console.error('Forgot Password Reset Error: ', error);
+        res.status(500).json({error: 'Password reset failed.'});
+    }
+});
+
 router.get('/profile', (req, res) =>{
     if (!req.session.user){
         return res.status(401).send('Please log in first.');
