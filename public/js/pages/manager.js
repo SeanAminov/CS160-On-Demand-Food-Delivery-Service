@@ -6,7 +6,7 @@ export default {
       <section class="hero">
         <h1>Manager Dashboard</h1>
         <p class="muted">
-          Manage inventory and customer orders.
+          Manage products, inventory, customer orders, and payments.
         </p>
       </section>
 
@@ -15,14 +15,14 @@ export default {
           class="card manager-option-card"
           href="#/manager-inventory"
         >
-          <h2>Inventory Adjustment</h2>
+          <h2>Products and Inventory</h2>
 
           <p class="muted">
-            Review current inventory and prepare quantity adjustments.
+            Change prices, names, weights, and other product details, and adjust stock.
           </p>
 
           <span class="button primary">
-            Open Inventory
+            Open Products
           </span>
         </a>
 
@@ -33,11 +33,26 @@ export default {
           <h2>Order Management</h2>
 
           <p class="muted">
-            Review customer orders, statuses, and cancellation options.
+            Review customer orders and what's on them, and cancel orders.
           </p>
 
           <span class="button primary">
             Manage Orders
+          </span>
+        </a>
+
+        <a
+          class="card manager-option-card"
+          href="#/manager-transactions"
+        >
+          <h2>Transaction History</h2>
+
+          <p class="muted">
+            See paid, refunded, and declined payments from Stripe, matched with each order.
+          </p>
+
+          <span class="button primary">
+            View Transactions
           </span>
         </a>
       </section>

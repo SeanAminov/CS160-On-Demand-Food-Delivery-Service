@@ -57,6 +57,13 @@ function draw(app, cart, note = '') {
     feeNote = 'Your order is 20 lb or more, so a $10 delivery fee applies.';
   }
 
+  // A manager can make a product heavier after it's in the cart, so the cart
+  // might already be over the limit. Checkout stays off until it's fixed.
+  const tooHeavy = cart.totalWeight > cart.maxWeight;
+  if (tooHeavy && !note) {
+    note = `Your cart is over ${cart.maxWeight} lb, which is more than one robot can carry. Please remove some items before checking out.`;
+  }
+
   app.innerHTML = `
     <h1>Your Cart</h1>
     <p class="message">${note}</p>
@@ -67,7 +74,7 @@ function draw(app, cart, note = '') {
 
     <div class="card summary">
       <p>Subtotal: <b>${money(cart.subtotal)}</b></p>
-      <p>Total weight: <b>${cart.totalWeight} lb</b></p>
+      <p>Total weight: <b>${cart.totalWeight} lb</b> <span class="muted">(${cart.maxWeight} lb max)</span></p>
       <p>Delivery fee: <b>${money(cart.deliveryFee)}</b></p>
       <p>Sales tax (${((cart.taxRate || 0.09375) * 100).toFixed(2)}%): <b>${money(cart.taxAmount || 0)}</b></p>
       <hr style="border:0; border-top:1px solid #d5e2d8; margin: 8px 0;">
@@ -77,7 +84,9 @@ function draw(app, cart, note = '') {
 
     <div class="buttons">
       <a class="button" href="#/catalog">Keep Shopping</a>
-      <a class="button primary" href="#/checkout">Checkout</a>
+      ${tooHeavy
+        ? '<button class="button primary" disabled>Checkout</button>'
+        : '<a class="button primary" href="#/checkout">Checkout</a>'}
     </div>
   `;
 

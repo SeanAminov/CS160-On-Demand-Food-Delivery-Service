@@ -2,6 +2,8 @@
 // Supports Google Maps JavaScript API when GOOGLE_MAPS_API_KEY is configured.
 // Provides a seamless interactive OpenStreetMap / Leaflet fallback when key is not yet set.
 
+import { startRobotSimulation } from './robot-simulation.js';
+
 const STORE_HUB = {
   name: 'OFS Downtown San Jose Hub',
   address: '1 Washington Sq, San Jose, CA 95192',
@@ -69,22 +71,6 @@ function generateGridPathway(stops) {
     points.push({ lat: Number(end.lat.toFixed(6)), lng: Number(end.lng.toFixed(6)) });
   }
   return points;
-}
-
-// Estimates the robot's real-time position along the polyline path
-function getRobotPosition(pathPoints, trip) {
-  if (!Array.isArray(pathPoints) || pathPoints.length === 0) {
-    return { lat: STORE_HUB.lat, lng: STORE_HUB.lng };
-  }
-  if (pathPoints.length === 1) return pathPoints[0];
-
-  // If trip is Out for Delivery, place the robot along the first leg / initial portion of the path
-  const progressRatio = 0.35; // Position along the active delivery leg
-  const targetIndex = Math.min(
-    Math.max(1, Math.floor(pathPoints.length * progressRatio)),
-    pathPoints.length - 1
-  );
-  return pathPoints[targetIndex];
 }
 
 // Fetch Google Maps API key from the server
@@ -198,6 +184,8 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
         </div>
       </div>
 
+      <div id="sim-${mapCanvasId}"></div>
+
       <div class="route-map-status-bar" id="status-${mapCanvasId}"></div>
 
       <!-- Stop Sequence Itinerary -->
@@ -216,7 +204,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
           ${orders.map((o) => {
             const isFocus = focusOrderId && Number(o.order_id) === focusOrderId;
             return `
-              <div class="route-stop-card ${isFocus ? 'focus-card' : ''}" style="${isFocus ? 'border: 2px solid #047857; background: #eef7f0;' : ''}">
+              <div class="route-stop-card ${isFocus ? 'focus-card' : ''}" data-sim-stop="${o.order_id}" style="${isFocus ? 'border: 2px solid #047857; background: #eef7f0;' : ''}">
                 <span class="stop-badge ${isFocus ? 'focus-badge' : ''}" style="${isFocus ? 'background: #047857;' : ''}">#${o.stop_sequence}</span>
                 <div class="stop-info">
                   <strong>Order #${o.order_id} &mdash; ${o.customer_name || 'Customer'}${isFocus ? ' <span style="background: #047857; color: white; padding: 2px 7px; border-radius: 10px; font-size: 11px; margin-left: 6px;">Your Delivery</span>' : ''}</strong>
@@ -229,7 +217,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
             `;
           }).join('')}
 
-          <div class="route-stop-card hub-card">
+          <div class="route-stop-card hub-card" data-sim-stop="hub">
             <span class="stop-badge hub-badge">Hub</span>
             <div class="stop-info">
               <strong>${hub.name} (Return to Base)</strong>
@@ -246,30 +234,37 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
   const statusBar = document.getElementById(`status-${mapCanvasId}`);
   const apiKey = await fetchMapsKey();
 
+  // The map gives back the route it drew and a way to move the robot along it
+  let drawn = null;
+
   if (apiKey) {
     try {
       await loadGoogleMaps(apiKey);
       statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active (Bicycle Lanes & Pathways)</span>`;
-      renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId, trip);
-      return;
+      drawn = renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId, trip);
     } catch (err) {
       console.warn('Google Maps script load failed, falling back to Leaflet:', err);
     }
   }
 
   // Fallback to Leaflet interactive map
-  try {
-    await loadLeaflet();
-    statusBar.innerHTML = `
-      <div style="background: #fefce8; border: 1px solid #fef08a; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #854d0e; display: flex; align-items: center; gap: 6px;">
-        <i class='bx bx-info-circle' style="font-size: 16px;"></i>
-        <span><b>Interactive Map:</b> Displaying route along legal street pathways and bike lanes.</span>
-      </div>
-    `;
-    renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId, trip);
-  } catch (err) {
-    canvas.innerHTML = `<div class="message error">Could not load map: ${err.message}</div>`;
+  if (!drawn) {
+    try {
+      await loadLeaflet();
+      statusBar.innerHTML = `
+        <div style="background: #fefce8; border: 1px solid #fef08a; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #854d0e; display: flex; align-items: center; gap: 6px;">
+          <i class='bx bx-info-circle' style="font-size: 16px;"></i>
+          <span><b>Interactive Map:</b> Displaying route along legal street pathways and bike lanes.</span>
+        </div>
+      `;
+      drawn = renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId, trip);
+    } catch (err) {
+      canvas.innerHTML = `<div class="message error">Could not load map: ${err.message}</div>`;
+      return;
+    }
   }
+
+  startRobotSimulation(document.getElementById(`sim-${mapCanvasId}`), trip, orders, drawn.pathPoints, drawn.placeRobot);
 }
 
 /**
@@ -481,40 +476,41 @@ function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = nul
     map
   });
 
-  // Render Robot Marker if trip is out for delivery or order has a dispatched robot
-  const isOutForDelivery = (trip && trip.delivery_status === 'Out for Delivery') ||
-    orders.some(o => o.status === 'Out for Delivery');
+  // The robot marker shows up the first time the trip simulation places it
+  let robotMarker = null;
+  function placeRobot(point) {
+    if (!robotMarker) {
+      robotMarker = new google.maps.Marker({
+        position: point,
+        map,
+        title: `${trip?.robot || 'Autonomous Robot'} (En Route)`,
+        label: { text: '🤖', fontSize: '16px' },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 18,
+          fillColor: '#ffffff',
+          fillOpacity: 1,
+          strokeColor: '#047857',
+          strokeWeight: 3
+        }
+      });
 
-  if (isOutForDelivery && pathPoints.length > 0) {
-    const robotPos = getRobotPosition(pathPoints, trip);
-    const robotMarker = new google.maps.Marker({
-      position: robotPos,
-      map,
-      title: `${trip?.robot || 'Autonomous Robot'} (En Route)`,
-      label: { text: '🤖', fontSize: '16px' },
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 18,
-        fillColor: '#ffffff',
-        fillOpacity: 1,
-        strokeColor: '#047857',
-        strokeWeight: 3
-      }
-    });
-
-    const robotInfo = new google.maps.InfoWindow({
-      content: `
-        <div style="padding: 4px; font-size: 13px;">
-          <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
-          <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
-          <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
-        </div>
-      `
-    });
-    robotMarker.addListener('click', () => robotInfo.open(map, robotMarker));
+      const robotInfo = new google.maps.InfoWindow({
+        content: `
+          <div style="padding: 4px; font-size: 13px;">
+            <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
+            <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
+            <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
+          </div>
+        `
+      });
+      robotMarker.addListener('click', () => robotInfo.open(map, robotMarker));
+    }
+    robotMarker.setPosition(point);
   }
 
   map.fitBounds(bounds);
+  return { pathPoints, placeRobot };
 }
 
 // Render using Leaflet (OpenStreetMap) fallback
@@ -596,27 +592,28 @@ function renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId = null, 
     opacity: 0.9
   }).addTo(map);
 
-  // Render Robot Marker if trip is out for delivery or order has a dispatched robot
-  const isOutForDelivery = (trip && trip.delivery_status === 'Out for Delivery') ||
-    orders.some(o => o.status === 'Out for Delivery');
+  // The robot marker shows up the first time the trip simulation places it
+  let robotMarker = null;
+  function placeRobot(point) {
+    if (!robotMarker) {
+      const robotIcon = window.L.divIcon({
+        className: 'custom-map-pin robot-pin',
+        html: '<span>🤖</span>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      });
 
-  if (isOutForDelivery && polylineCoords.length > 0) {
-    const robotPos = getRobotPosition(polylineCoords.map(p => ({ lat: p[0], lng: p[1] })), trip);
-    const robotIcon = window.L.divIcon({
-      className: 'custom-map-pin robot-pin',
-      html: '<span>🤖</span>',
-      iconSize: [34, 34],
-      iconAnchor: [17, 17]
-    });
-
-    window.L.marker([robotPos.lat, robotPos.lng], { icon: robotIcon })
-      .bindPopup(`
-        <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
-        <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
-        <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
-      `)
-      .addTo(map);
+      robotMarker = window.L.marker([point.lat, point.lng], { icon: robotIcon })
+        .bindPopup(`
+          <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
+          <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
+          <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
+        `)
+        .addTo(map);
+    }
+    robotMarker.setLatLng([point.lat, point.lng]);
   }
 
   map.fitBounds(polyline.getBounds().pad(0.15));
+  return { pathPoints: polylineCoords.map(([lat, lng]) => ({ lat, lng })), placeRobot };
 }

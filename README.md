@@ -132,7 +132,7 @@ Cancelling a paid order refunds it through Stripe. Payments and refunds show up 
     db.js              the MySQL connection, and the setup that runs schema.sql when the server starts
     auth.js            password hashing and the login and role checks
     address.js         checks delivery addresses for checkout and My Account
-    routes/            the API routes (users, cart, orders, deliveries, employee, manager)
+    routes/            the API routes (users, cart, orders, deliveries, employee, manager, products, transactions)
     data/schema.sql    creates the database, tables, and sample products
     public/index.html  the header, nav, and footer that every page shares
     public/css/        styles
@@ -151,16 +151,19 @@ Each page is its own file in `public/js/pages`. The part of the URL after the # 
 * `#/catalog` catalog.js
 * `#/cart` cart.js
 * `#/checkout` checkout.js
-* `#/orders` orders.js
+* `#/orders` orders.js, where customers track their deliveries and press Got My Order once their groceries arrive
 * `#/account` account.js, where customers save their delivery address
 * `#/employee` employee.js
 * `#/employee-packing` employee-packing.js
 * `#/employee-shipping` employee-shipping.js, where employees pick a robot and send out a trip
 * `#/manager` manager.js
-* `#/manager-inventory` manager-inventory.js, where managers change stock and see what's running low (at or below its reorder level)
-* `#/manager-orders` manager-orders.js
+* `#/manager-inventory` manager-inventory.js, where managers add, edit, and remove products, change stock, and see what's running low (at or below its reorder level)
+* `#/manager-orders` manager-orders.js, where clicking an order shows the products in it
+* `#/manager-transactions` manager-transactions.js, the payments and refunds from Stripe matched to our orders
 
 All of these work. Only managers can cancel orders, so employees don't see the Cancel buttons.
+
+Every trip's route map (on the Employee Dashboard, on Waiting to Ship after a robot goes out, and on My Orders) has a Trip Simulation under it. Dragging its timeline moves the robot along the planned route, and it reaches each stop at its ETA. A trip that's out right now starts where the robot would be at this moment and keeps moving in real time. The simulation only moves the robot on the page and never changes an order. The code is in `public/js/robot-simulation.js`.
 
 Pages starting with `#/employee` are only for employees and managers, and `#/manager` is only for managers. `app.js` checks this before showing the page. The server also checks the role before sending any employee data, and that's the check that actually protects it.
 
@@ -169,22 +172,27 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 ## API
 
 * `GET /products` the products that are for sale
+* `POST /products` add a product with its starting stock (managers only)
+* `PUT /products/:id` change a product's name, price, weight, category, description, photo, and low stock level (managers only)
+* `DELETE /products/:id` take a product out of the shop and out of every cart. Old orders still show it (managers only)
 * `POST /register`, `POST /login`, `POST /logout` accounts
 * `GET /profile` who is logged in
 * `GET /profile/address`, `PUT /profile/address` the logged in user's saved delivery address
 * `GET /cart` the logged in user's cart, with the subtotal, total weight, delivery fee, and tax
-* `POST /cart/items`, `PUT /cart/items/:id`, `DELETE /cart/items/:id` add, change, and remove cart items
+* `POST /cart/items`, `PUT /cart/items/:id`, `DELETE /cart/items/:id` add, change, and remove cart items. A cart can't go over 200 lb, since that's all one robot can carry
 * `GET /stripe-key` the publishable key the checkout page needs for Stripe's card box
 * `POST /checkout` charges the card through Stripe and turns the cart into an order
 * `GET /orders`, `GET /orders/:id` a customer's own orders, or every order for staff
 * `PUT /orders/:id/status` move an order to its next status (employees and managers, but only managers can cancel)
 * `POST /orders/:id/cancel` cancel an order, refund it, and put its items back in stock (managers only)
+* `POST /orders/:id/received` a customer marks their own order delivered while it's out for delivery (customers only)
 * `POST /deliveries/batches` sends a robot out with staged orders and optimized multi-stop route with traffic (employees and managers only)
 * `GET /deliveries`, `GET /deliveries/:id`, `PUT /deliveries/:id/complete` robot trips
 * `GET /maps-key` Google Maps API key for the frontend interactive map
 * `GET /employee/orders` paid orders that need to be packed (employees and managers only)
 * `GET /manager/inventory` stock for every product (managers only)
 * `PATCH /manager/inventory/:productId` raise or lower one product's stock (managers only)
+* `GET /transactions` payments and refunds from Stripe, matched to orders by Stripe ID (managers only)
 
 The rest of the planned routes are in the API Design section of our Part 2 document.
 
@@ -193,9 +201,8 @@ The rest of the planned routes are in the API Design section of our Part 2 docum
 The backlog in our Part 2 document says who is doing what.
 
 1. Delivery routes and Google Maps integration (Completed: Geocoding, multi-stop round-trip optimization with traffic departure time, and interactive visual map).
-2. Shop page: category filter.
-3. Password reset.
-4. Test everything using the test plan from Part 2.
+2. Password reset.
+3. Test everything using the test plan from Part 2.
 
 Part III, the working site and our 12 minute presentation, is due 11/23.
 
@@ -232,4 +239,6 @@ DEALLOCATE PREPARE add_phone_column_statement;
 
 Then restart the server. The terminal should say "Database initialized", and everyone else gets the column the next time they start theirs. Nobody has to run SQL by hand.
 
-A new table only needs `CREATE TABLE IF NOT EXISTS`. New sample rows should skip ones that already exist, the way the products do, so nothing gets added twice.
+A new table only needs `CREATE TABLE IF NOT EXISTS`. New sample rows should skip ones that already exist, so nothing gets added twice.
+
+Sample products are different. Managers can rename products, so the first 16 only go into an empty table. Otherwise a restart would add the old name back as a new product. If you add a new sample product, give it its own `WHERE NOT EXISTS` check on the name so people who already have the database get it too.

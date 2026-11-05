@@ -8,6 +8,8 @@ const router = express.Router();
 const TAX_RATE = process.env.TAX_RATE ? Number(process.env.TAX_RATE) : 0.09375;
 const FREE_DELIVERY_LIMIT = 20;
 const DELIVERY_FEE = 10;
+// One robot carries up to 200 lbs, so one order can't weigh more than that
+const MAX_CART_WEIGHT = 200;
 
 // Stripe test mode. The secret key stays on the server in .env. If someone hasn't
 // added it yet, the site still runs and checkout says what's missing.
@@ -55,7 +57,7 @@ router.get('/stripe-key', (req, res) => {
 router.post('/checkout', loginVerification, async (req, res) => {
   const userId = req.session.user.user_id;
   // delivery_address has the address boxes from the page: street, unit, city, state, and zip
-  const { delivery_address, payment_method_id } = req.body || {};
+  const { delivery_address, payment_method_id, expected_total } = req.body || {};
 
   // Validate the address and the Downtown San Jose service area
   const location = await checkAddress(delivery_address);
@@ -106,6 +108,21 @@ router.post('/checkout', loginVerification, async (req, res) => {
   const totalPrice = Number((subtotal + deliveryFee + taxAmount).toFixed(2));
   totalWeight = Number(totalWeight.toFixed(2));
   subtotal = Number(subtotal.toFixed(2));
+
+  // The cart pages stop this, but a manager may have made something heavier since it was added
+  if (totalWeight > MAX_CART_WEIGHT) {
+    return res.status(409).json({
+      error: `Your cart weighs ${totalWeight} lb, and one order can't go over ${MAX_CART_WEIGHT} lb since that's all one robot can carry. Please remove some items from your cart.`
+    });
+  }
+
+  // A manager may have changed a price or weight since the customer opened checkout.
+  // Never charge a different amount than the page showed them.
+  if (expected_total !== undefined && Number(expected_total) !== totalPrice) {
+    return res.status(409).json({
+      error: 'The total changed since you opened this page. Please check the new total and enter your card again.'
+    });
+  }
 
   const conn = await pool.getConnection();
   let payment = null;
@@ -302,7 +319,7 @@ router.get('/orders/:id', loginVerification, async (req, res) => {
 
     const [items] = await pool.query(`
       SELECT oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.unit_weight,
-             p.name, p.category
+             p.name, p.category, p.description, p.image_url
       FROM OrderItems AS oi
       JOIN Products AS p ON oi.product_id = p.product_id
       WHERE oi.order_id = ?
@@ -434,6 +451,39 @@ router.post('/orders/:id/cancel', loginVerification, roleVerification('manager')
     res.status(500).json({ error: 'Could not cancel order.' });
   } finally {
     conn.release();
+  }
+});
+
+// POST /orders/:id/received (Role: Customer)
+// The customer presses Got My Order once they have their groceries. This only marks
+// their own order. The employee still finishes the trip when the robot gets back,
+// and that skips orders that are already delivered.
+router.post('/orders/:id/received', loginVerification, roleVerification('customer'), async (req, res) => {
+  const orderId = Number(req.params.id);
+
+  try {
+    const [orderRows] = await pool.query('SELECT user_id FROM Orders WHERE order_id = ?', [orderId]);
+    if (orderRows.length === 0) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+    if (orderRows[0].user_id !== req.session.user.user_id) {
+      return res.status(403).json({ error: 'You can only confirm your own orders.' });
+    }
+
+    // The status check is part of the update, so this can't undo something an
+    // employee changed a moment ago
+    const [result] = await pool.query(
+      "UPDATE Orders SET status = 'Delivered' WHERE order_id = ? AND status = 'Out for Delivery'",
+      [orderId]
+    );
+    if (result.affectedRows === 0) {
+      return res.status(400).json({ error: 'You can only confirm an order while it is out for delivery.' });
+    }
+
+    res.json({ message: `Order #${orderId} is marked as delivered.`, order_id: orderId, status: 'Delivered' });
+  } catch (err) {
+    console.error('Order received error:', err);
+    res.status(500).json({ error: 'Could not update the order.' });
   }
 });
 

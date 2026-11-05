@@ -1,5 +1,9 @@
+import { renderOrderDetails } from '../order-details.js';
+import { managerNavigation } from '../manager-nav.js';
+
 let allOrders = [];
 let searchTerm = '';
+let openOrderId = null;
 
 const cancellableStatuses = [
   'Pending',
@@ -67,10 +71,18 @@ function renderOrderResults(app) {
               const canCancel =
                 cancellableStatuses.includes(order.status);
 
+              const isOpen = order.order_id === openOrderId;
+
               return `
-                <tr>
+                <tr class="order-row" data-order-id="${order.order_id}">
                   <td>
-                    <strong>#${order.order_id}</strong>
+                    <button
+                      class="order-details-toggle"
+                      type="button"
+                      aria-expanded="${isOpen}"
+                    >
+                      ${isOpen ? '▾' : '▸'} #${order.order_id}
+                    </button>
                   </td>
 
                   <td>
@@ -122,6 +134,18 @@ function renderOrderResults(app) {
                     </button>
                   </td>
                 </tr>
+
+                ${
+                  isOpen
+                    ? `
+                      <tr class="order-details-row">
+                        <td colspan="7">
+                          <div id="order-details-panel"></div>
+                        </td>
+                      </tr>
+                    `
+                    : ''
+                }
               `;
             })
             .join('')}
@@ -131,6 +155,39 @@ function renderOrderResults(app) {
   `;
 
   bindCancelButtons(app);
+  bindOrderRows(app);
+  showOpenOrder(app);
+}
+
+// Clicking an order opens its products under the row, and clicking it again closes them
+function bindOrderRows(app) {
+  app.querySelectorAll('.order-row').forEach((row) => {
+    row.addEventListener('click', (event) => {
+      if (event.target.closest('.order-cancel-button')) {
+        return;
+      }
+
+      const orderId = Number(row.dataset.orderId);
+
+      openOrderId = orderId === openOrderId ? null : orderId;
+      renderOrderResults(app);
+    });
+  });
+}
+
+async function showOpenOrder(app) {
+  const panel = app.querySelector('#order-details-panel');
+
+  if (!panel) {
+    return;
+  }
+
+  try {
+    await renderOrderDetails(panel, openOrderId, true);
+  } catch (error) {
+    panel.innerHTML = '<p class="message"></p>';
+    panel.querySelector('.message').textContent = error.message;
+  }
 }
 
 function bindCancelButtons(app) {
@@ -205,28 +262,20 @@ export default {
   async show(app) {
     searchTerm = '';
 
+    // Transaction History links here with the order to open, like #/manager-orders?id=12
+    const queryString = window.location.hash.split('?')[1] || '';
+    openOrderId = Number(new URLSearchParams(queryString).get('id')) || null;
+
     app.innerHTML = `
       <section class="hero">
         <h1>Order Management</h1>
 
         <p class="muted">
-          Review customer orders and cancel orders when necessary.
+          Click an order to see its products. Cancel orders when necessary.
         </p>
       </section>
 
-      <nav class="buttons manager-navigation">
-        <a class="button" href="#/manager">
-          Manager Dashboard
-        </a>
-
-        <a class="button" href="#/manager-inventory">
-          Inventory Adjustment
-        </a>
-
-        <a class="button primary" href="#/manager-orders">
-          Order Management
-        </a>
-      </nav>
+      ${managerNavigation('#/manager-orders')}
 
       <section class="card order-management-card">
         <div class="order-management-header">
@@ -268,6 +317,12 @@ export default {
       allOrders = await response.json();
 
       renderOrderResults(app);
+
+      const openRow = app.querySelector('.order-details-row');
+
+      if (openRow) {
+        openRow.scrollIntoView({ block: 'center' });
+      }
 
       app
         .querySelector('#order-search')

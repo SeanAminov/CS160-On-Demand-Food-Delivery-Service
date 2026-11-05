@@ -20,6 +20,8 @@ router.get('/inventory', async (req, res) => {
         p.product_id,
         p.name,
         p.category,
+        p.description,
+        p.image_url,
         p.price,
         p.weight,
         i.quantity,

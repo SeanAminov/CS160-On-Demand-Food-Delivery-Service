@@ -128,6 +128,13 @@ function renderCheckout(app, cart, savedAddress, publishableKey, errorMessage = 
   const placeBtn = app.querySelector('#place-order-btn');
   const errorEl = app.querySelector('#checkout-error');
 
+  // One robot carries up to 200 lbs, so a heavier order has to be trimmed in the cart first
+  if (cart.totalWeight > cart.maxWeight) {
+    errorEl.textContent = `Your cart weighs ${cart.totalWeight} lb, and one order can't go over ${cart.maxWeight} lb. Please go back to your cart and remove some items.`;
+    placeBtn.disabled = true;
+    return;
+  }
+
   // Stripe's card box lives on Stripe's own servers, so the card number typed
   // into it goes straight to Stripe and our code never sees it
   if (!publishableKey || !window.Stripe) {
@@ -169,7 +176,8 @@ function renderCheckout(app, cart, savedAddress, publishableKey, errorMessage = 
 
       const result = await cartRequest('POST', '/checkout', {
         delivery_address: address,
-        payment_method_id: paymentMethod.id
+        payment_method_id: paymentMethod.id,
+        expected_total: cart.total
       });
 
       if (saveAddress) {
@@ -182,6 +190,17 @@ function renderCheckout(app, cart, savedAddress, publishableKey, errorMessage = 
 
       renderConfirmation(app, result);
     } catch (err) {
+      // A price or weight changed, or something sold out, so show the new numbers
+      if (err.status === 409) {
+        try {
+          const freshCart = await cartRequest('GET', '/cart');
+          renderCheckout(app, freshCart, address, publishableKey, err.message);
+          return;
+        } catch {
+          // Couldn't reload the cart, so just show the message below
+        }
+      }
+
       placeBtn.disabled = false;
       placeBtn.textContent = `Place Order (${money(cart.total)})`;
       errorEl.textContent = err.message;
