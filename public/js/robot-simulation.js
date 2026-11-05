@@ -67,12 +67,16 @@ export function startRobotSimulation(panel, trip, orders, path, placeRobot) {
     return { orderId: order.order_id, distance: distanceSoFar[index], minute: lastMinute };
   });
 
-  // After the last stop the robot heads home at the same pace it made its deliveries,
-  // unless the trip's estimate says the whole trip takes longer than that
+  // The robot is back at the hub at the trip's estimated total time. Trips from before
+  // the stop times were fixed can have a total that's shorter than the last stop's time,
+  // so those head home at the same pace they made their deliveries.
   const lastStop = stops[stops.length - 1];
-  const endMinute = lastStop && lastStop.distance > 0
-    ? Math.max(tripMinutes, (lastStop.minute * routeLength) / lastStop.distance)
-    : Math.max(tripMinutes, lastMinute);
+  let endMinute = tripMinutes;
+  if (lastStop && endMinute <= lastStop.minute) {
+    endMinute = lastStop.distance > 0
+      ? (lastStop.minute * routeLength) / lastStop.distance
+      : lastStop.minute + 1;
+  }
 
   // The trip in pieces: hub to stop 1, stop 1 to stop 2, and so on, then back to the hub
   const legs = [];

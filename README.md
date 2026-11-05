@@ -11,7 +11,7 @@ What we're using:
 * Database: MySQL
 * Logins: sessions with express-session, and passwords hashed with bcrypt
 * Payments: Stripe test mode
-* Maps and routing: Google Maps API (Geocoding, Directions with departure traffic, and interactive visual map)
+* Maps and routing: Google Maps Platform (Geocoding API, Routes API walking routes, and the Maps JavaScript API for the map)
 
 ## How to run it
 
@@ -69,20 +69,22 @@ Git ignores `.env`, so it never gets uploaded. Everyone makes their own. The dat
 
 **The Stripe keys:** the team shares one Stripe account in test mode, so no real money ever moves. Ask Sean for the keys in a private message. Never put them in the code, on GitHub, or in a public channel. The publishable key (`pk_test_`) is fine for browsers to see, but the secret key (`sk_test_`) can make charges and refunds, so it has to stay private. Without the keys the site still runs, but checkout says payments aren't set up.
 
-**The Google Maps key:** used for address geocoding, multi-stop round-trip route optimization with departure traffic, and rendering the Google Maps visual view on the employee dashboard. Without the key, the site continues to run using built-in Downtown San Jose fallback coordinates and interactive routing so local testing never breaks.
+**The Google Maps key:** used to find where each delivery address really is, plan each robot trip as a walking route with the best stop order, and show the Google map. Robots ride on sidewalks, so trips use walking routes, and each stop's time comes from the route itself. The team shares one key, so ask Sean for it in a private message, the same as the Stripe keys. Without the key, the site still runs: addresses get approximate spots near downtown, routes come from the free OpenStreetMap walking route server, and the map uses OpenStreetMap.
 
 **How to get a Google Maps API key (step by step):**
 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and sign in with your Google account.
 2. Click the project dropdown at the top and click **New Project** (you can name it `OFS-Food-Delivery`), then click **Create**.
-3. In the top search bar, search for each of these 3 APIs and click **Enable**:
+3. Open the left menu (three lines at top left), go to **Billing**, and link a billing account with a card. Google won't run the APIs without one, but our usage stays inside the free monthly amount.
+4. In the top search bar, search for each of these 3 APIs and click **Enable**:
    * **Geocoding API**
    * **Routes API** (Google Maps Platform's modern routing service)
    * **Maps JavaScript API**
-4. Open the left menu (three lines at top left) and go to **APIs & Services > Credentials**.
-5. Click **+ Create Credentials** at the top of the page and select **API key**.
-6. Copy your key and paste it into your `.env` file next to `GOOGLE_MAPS_API_KEY=`.
-7. (Optional but recommended) Click **Edit API key** on the screen, and under **API restrictions**, select the 3 APIs above (Geocoding API, Routes API, and Maps JavaScript API) so the key is restricted to our delivery services.
+5. Open the left menu and go to **APIs & Services > Credentials**.
+6. Click **+ Create Credentials** at the top of the page and select **API key**. If Google asks you to pick a restriction type, click **Maybe later**.
+7. Copy your key and paste it into your `.env` file next to `GOOGLE_MAPS_API_KEY=`.
+8. (Optional but recommended) Click **Edit API key** on the screen, and under **API restrictions**, select the 3 APIs above (Geocoding API, Routes API, and Maps JavaScript API) so the key is restricted to our delivery services. Leave **Application restrictions** on **None**, because our server uses the key too and a website restriction would block it.
+9. (Optional but recommended) Open each of the 3 APIs, go to its **Quotas** tab, and lower the requests per day to a few hundred so the key can never run up a bill.
 
 **What SESSION_SECRET is for:** when you log in, the server gives your browser a cookie with a session ID, and it signs that cookie using this secret. When the cookie comes back, the server checks the signature, so nobody can edit their cookie to pretend to be someone else. The secret has to stay private, which is why it goes in `.env` instead of the code. If it's missing, the server uses a test secret that's written in the code, which is fine on your own computer but not safe anywhere real. If you change it, everyone gets logged out.
 
@@ -200,7 +202,7 @@ The rest of the planned routes are in the API Design section of our Part 2 docum
 
 The backlog in our Part 2 document says who is doing what.
 
-1. Delivery routes and Google Maps integration (Completed: Geocoding, multi-stop round-trip optimization with traffic departure time, and interactive visual map).
+1. Delivery routes and Google Maps integration (Completed: geocoding, multi-stop round-trip walking routes with the best stop order, the interactive map, and the trip simulation).
 2. Password reset.
 3. Test everything using the test plan from Part 2.
 

@@ -169,7 +169,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
             Store Hub: <b>${hub.name}</b> &bull; Round Trip Circuit (${orders.length} stops)
           </span>
           <div style="margin-top: 6px;">
-            <span class="route-mode-badge"><i class='bx bx-cycling'></i> Legal Bike Lanes & Designated Pathways</span>
+            <span class="route-mode-badge"><i class='bx bx-walk'></i> Sidewalks & Walking Paths</span>
           </div>
         </div>
         <div style="font-size: 13px; text-align: right;">
@@ -190,7 +190,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
 
       <!-- Stop Sequence Itinerary -->
       <div class="route-stops-container">
-        <h4 style="margin: 8px 0; font-size: 14px;">Optimized Delivery Itinerary (Departure Traffic Applied):</h4>
+        <h4 style="margin: 8px 0; font-size: 14px;">Optimized Delivery Itinerary:</h4>
         <div class="route-stops-timeline">
           <div class="route-stop-card hub-card">
             <span class="stop-badge hub-badge">Hub</span>
@@ -240,7 +240,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
   if (apiKey) {
     try {
       await loadGoogleMaps(apiKey);
-      statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active (Bicycle Lanes & Pathways)</span>`;
+      statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active (Walking Paths)</span>`;
       drawn = renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId, trip);
     } catch (err) {
       console.warn('Google Maps script load failed, falling back to Leaflet:', err);
@@ -254,7 +254,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
       statusBar.innerHTML = `
         <div style="background: #fefce8; border: 1px solid #fef08a; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #854d0e; display: flex; align-items: center; gap: 6px;">
           <i class='bx bx-info-circle' style="font-size: 16px;"></i>
-          <span><b>Interactive Map:</b> Displaying route along legal street pathways and bike lanes.</span>
+          <span><b>Interactive Map:</b> Showing the walking route the robot takes.</span>
         </div>
       `;
       drawn = renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId, trip);
@@ -269,7 +269,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
 
 /**
  * Customer Order Tracking Map:
- * If the order is dispatched in a delivery trip, renders the full traffic route and highlights their stop.
+ * If the order is dispatched in a delivery trip, renders the full route and highlights their stop.
  * If the order is still Pending, Preparing, or Staged, displays the delivery destination & Hub map.
  */
 export async function renderOrderTrackingMap(containerElement, order) {
@@ -327,7 +327,7 @@ async function renderDestinationMap(containerElement, order) {
         ${
           order.status === 'Preparing' || order.status === 'Pending'
             ? 'Your groceries are currently being packed at the Downtown Hub. Once packed and staged, our autonomous delivery robot will be dispatched on the optimal route.'
-            : 'Your order is staged and waiting for robot assignment. Real-time traffic routing and live arrival estimates will activate when the robot departs.'
+            : 'Your order is staged and waiting for robot assignment. The walking route and arrival times are set when the robot leaves.'
         }
       </div>
     </div>
@@ -466,7 +466,7 @@ function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = nul
     pathPoints = generateGridPathway(stopCoords);
   }
 
-  // Draw Legal Bike Lane & Pathway Polyline
+  // Draw the walking route
   new google.maps.Polyline({
     path: pathPoints,
     geodesic: true,
@@ -499,8 +499,8 @@ function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = nul
         content: `
           <div style="padding: 4px; font-size: 13px;">
             <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
-            <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
-            <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
+            <span>Following sidewalks and crosswalks.</span><br/>
+            <span style="color: #666; font-size: 11px;">Speed: about walking pace &bull; Zero emissions</span>
           </div>
         `
       });
@@ -606,8 +606,8 @@ function renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId = null, 
       robotMarker = window.L.marker([point.lat, point.lng], { icon: robotIcon })
         .bindPopup(`
           <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
-          <span>Navigating legal bike lanes & pedestrian crosswalks.</span><br/>
-          <span style="color: #666; font-size: 11px;">Speed: ~6 mph &bull; Zero emissions</span>
+          <span>Following sidewalks and crosswalks.</span><br/>
+          <span style="color: #666; font-size: 11px;">Speed: about walking pace &bull; Zero emissions</span>
         `)
         .addTo(map);
     }

@@ -120,7 +120,7 @@ function renderOrders(app, orders, note = null) {
         <div style="margin-bottom: 14px;">
           <h2 style="margin: 0 0 6px; font-size: 20px; color: #14532d;">Order #${activeDeliveryOrder.order_id} is En Route!</h2>
           <p style="margin: 0; color: #166534; font-size: 14px;">
-            Our autonomous robot is traveling on designated bike lanes and pedestrian pathways to <b>${activeDeliveryOrder.delivery_address}</b>.
+            Our autonomous robot is on its way along sidewalks and walking paths to <b>${activeDeliveryOrder.delivery_address}</b>.
             ${activeDeliveryOrder.estimated_arrival ? `Estimated Arrival: <b>${etaStr}</b>.` : ''}
           </p>
           <button class="button small primary got-order" data-id="${activeDeliveryOrder.order_id}" style="margin-top: 10px;">Got My Order</button>

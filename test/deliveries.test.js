@@ -89,7 +89,7 @@ describe('Deliveries & Robot Pathway Trips API', () => {
     assert.strictEqual(data.error, 'Please pick a robot for this trip.');
   });
 
-  test('POST /deliveries/batches dispatches trip using legal bicycle lanes and stores overview_polyline', async () => {
+  test('POST /deliveries/batches dispatches trip along a walking route and stores overview_polyline', async () => {
     testSessionUser = { user_id: 1, role: 'employee', name: 'Staff' };
 
     const res = await fetch(`${baseUrl}/deliveries/batches`, {
@@ -107,7 +107,7 @@ describe('Deliveries & Robot Pathway Trips API', () => {
     testDeliveryId = data.delivery_id;
 
     assert.strictEqual(data.robot, 'Robot 1');
-    assert.strictEqual(data.route.travel_mode, 'BICYCLE');
+    assert.strictEqual(data.route.travel_mode, 'WALK');
     assert.ok(data.route.overview_polyline, 'Must include non-empty polyline');
     assert.ok(data.route.overview_polyline.length > 10);
 
@@ -126,7 +126,7 @@ describe('Deliveries & Robot Pathway Trips API', () => {
     assert.strictEqual(data.delivery_id, testDeliveryId);
     assert.strictEqual(data.delivery_status, 'Out for Delivery');
     assert.ok(data.route_parsed);
-    assert.strictEqual(data.route_parsed.travel_mode, 'BICYCLE');
+    assert.strictEqual(data.route_parsed.travel_mode, 'WALK');
     assert.ok(data.route_parsed.overview_polyline);
     assert.ok(data.orders.some(o => o.order_id === testOrderId));
   });

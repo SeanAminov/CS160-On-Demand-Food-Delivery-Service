@@ -74,7 +74,7 @@ describe('Maps & Delivery Robot Routing', () => {
     });
   });
 
-  describe('Route Optimization & Legal Bike Lane Mode', () => {
+  describe('Route Optimization & Walking Mode', () => {
     test('Throws error when no orders are provided', async () => {
       await assert.rejects(
         async () => {
@@ -84,7 +84,7 @@ describe('Maps & Delivery Robot Routing', () => {
       );
     });
 
-    test('Generates valid bicycle pathway route with Google Maps or Fallback', async () => {
+    test('Generates valid walking route with Google Maps or Fallback', async () => {
       const orders = [
         { order_id: 1, delivery_lat: 37.3382, delivery_lng: -121.8863, delivery_address: '100 E San Carlos St' },
         { order_id: 2, delivery_lat: 37.3330, delivery_lng: -121.8790, delivery_address: '400 S 8th St' }
@@ -95,7 +95,7 @@ describe('Maps & Delivery Robot Routing', () => {
       assert.ok(route.totalDistanceMiles > 0);
       assert.ok(route.totalDurationMinutes > 0);
       assert.strictEqual(route.orderedStops.length, 2);
-      assert.strictEqual(route.routeInformation.travel_mode, 'BICYCLE');
+      assert.strictEqual(route.routeInformation.travel_mode, 'WALK');
       assert.ok(typeof route.routeInformation.overview_polyline === 'string');
       assert.ok(route.routeInformation.overview_polyline.length > 0);
 
@@ -119,7 +119,7 @@ describe('Maps & Delivery Robot Routing', () => {
 
         const fallbackRoute = await getOptimizedRoute(orders);
 
-        assert.strictEqual(fallbackRoute.routeInformation.travel_mode, 'BICYCLE');
+        assert.strictEqual(fallbackRoute.routeInformation.travel_mode, 'WALK');
         assert.ok(fallbackRoute.routeInformation.overview_polyline.length > 0);
 
         const decoded = decodePolyline(fallbackRoute.routeInformation.overview_polyline);
