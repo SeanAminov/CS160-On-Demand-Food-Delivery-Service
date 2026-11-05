@@ -286,7 +286,13 @@ export default {
 
           const mapContainer = content.querySelector('#dispatched-trip-map');
           if (mapContainer) {
-            renderRouteMap(mapContainer, trip);
+            // The dispatch reply is only a summary, so load the whole trip for the map
+            const tripResponse = await fetch(`/deliveries/${trip.delivery_id}`);
+            if (tripResponse.ok) {
+              renderRouteMap(mapContainer, await tripResponse.json());
+            } else {
+              mapContainer.innerHTML = '<p class="muted">Could not load the route map.</p>';
+            }
           }
         } catch (error) {
           message.textContent = error.message;

@@ -10,6 +10,7 @@ import employeeShipping from './pages/employee-shipping.js';
 import manager from './pages/manager.js';
 import managerInventory from './pages/manager-inventory.js';
 import managerOrders from './pages/manager-orders.js';
+import managerTransactions from './pages/manager-transactions.js';
 import register from './pages/register.js';
 import account from './pages/account.js';
 import forgotPassword from './pages/forgot-password.js';
@@ -34,6 +35,7 @@ const pages = {
   '/manager-inventory': managerInventory,
   '/manager-orders': managerOrders,
   '/forgot-password': forgotPassword,
+  '/manager-transactions': managerTransactions,
 };
 
 // Pages only some roles can open. Any page starting with /employee is covered,

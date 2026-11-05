@@ -80,6 +80,7 @@ function updateCartSummary(app, cart, isLoggedOut = false) {
     <span><strong>${itemCount}</strong> item${itemCount === 1 ? '' : 's'}</span>
     <span>Subtotal: <strong>${money(subtotal)}</strong></span>
     <span>Estimated total: <strong>${money(estimatedTotal)}</strong></span>
+    <span>Weight: <strong>${cart.totalWeight} of ${cart.maxWeight} lb</strong></span>
   `;
 }
 

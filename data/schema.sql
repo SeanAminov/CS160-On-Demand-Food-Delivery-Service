@@ -201,103 +201,105 @@ CREATE TABLE IF NOT EXISTS PasswordResetTokens (
         ON DELETE CASCADE
 );
 
--- Seed products. Each statement is guarded so this file can be run more than once
--- without creating duplicate products.
+-- Seed products, but only into an empty table. The server runs this file every time it
+-- starts, and managers can rename products, so checking by name would add the old name back.
+SET @product_count = (SELECT COUNT(*) FROM Products);
+
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Organic Fuji Apples', 'Fruits',
        'Crisp, sweet apples sold by the pound.', 3.49, 1.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Organic Fuji Apples');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Bananas', 'Fruits',
        'Fresh bananas sold by the pound.', 1.29, 1.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Bananas');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Whole Milk', 'Dairy',
        'One gallon of whole milk.', 4.99, 8.60, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Whole Milk');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Large Brown Eggs', 'Dairy',
        'One dozen large brown eggs.', 4.49, 1.50, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Large Brown Eggs');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Cheddar Cheese', 'Dairy',
        'Sharp cheddar cheese block.', 5.99, 0.50, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Cheddar Cheese');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Chicken Breast', 'Meat',
        'Boneless, skinless chicken breast.', 8.99, 2.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Chicken Breast');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Ground Beef', 'Meat',
        'Fresh ground beef for burgers and meals.', 7.99, 1.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Ground Beef');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Brown Rice', 'Pantry',
        'Long-grain brown rice.', 5.49, 2.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Brown Rice');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Spaghetti Pasta', 'Pantry',
        'Classic dried spaghetti pasta.', 2.49, 1.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Spaghetti Pasta');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Tomato Pasta Sauce', 'Pantry',
        'Traditional tomato sauce for pasta.', 3.29, 1.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Tomato Pasta Sauce');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Potato Chips', 'Snacks',
        'Crispy salted potato chips.', 3.99, 0.75, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Potato Chips');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Granola Bars', 'Snacks',
        'Chewy oat and honey granola bars.', 4.99, 0.75, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Granola Bars');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Orange Juice', 'Beverages',
        '100% orange juice.', 5.99, 6.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Orange Juice');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Bottled Water', 'Beverages',
        'Pack of purified bottled water.', 4.49, 12.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Bottled Water');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Frozen Cheese Pizza', 'Frozen Foods',
        'Four-cheese pizza ready to bake.', 6.99, 1.50, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Frozen Cheese Pizza');
+WHERE @product_count = 0;
 
 INSERT INTO Products (name, category, description, price, weight, active)
 SELECT 'Frozen Mixed Vegetables', 'Frozen Foods',
        'Frozen mix of peas, carrots, corn, and green beans.', 3.49, 1.00, TRUE
 FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Products WHERE name = 'Frozen Mixed Vegetables');
+WHERE @product_count = 0;
 
 -- Add one inventory row for every seeded product.
 INSERT INTO Inventory (product_id, quantity, reorder_level)
@@ -338,8 +340,9 @@ WHERE i.product_id IS NULL
   );
 
 -- Product images are stored as URLs so the catalog can display them without
--- adding binary files to the database. These updates also populate images for
--- products that were already seeded before image support was added.
+-- adding binary files to the database. This fills in photos for new sample products,
+-- for databases from before photos existed, and for the three old links we replaced.
+-- Any other photo may have been set by a manager, so it's left alone.
 UPDATE Products
 SET image_url = CASE name
     WHEN 'Organic Fuji Apples' THEN 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=800&q=80'
@@ -360,8 +363,13 @@ SET image_url = CASE name
     WHEN 'Frozen Mixed Vegetables' THEN 'https://d2lnr5mha7bycj.cloudfront.net/product-image/file/large_ccdf2909-c870-48af-913d-c3ca75b7c7c2.jpg'
     ELSE image_url
 END
-WHERE image_url IS NULL
-    OR name IN ('Tomato Pasta Sauce', 'Bottled Water', 'Frozen Mixed Vegetables');
+WHERE @product_count = 0
+    OR @image_column_exists = 0
+    OR image_url IN (
+        'https://images.unsplash.com/photo-1472476442910-44a20e994a6c?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1564419320461-6870880221ad?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1587334206596-c0f9f7dccbe6?auto=format&fit=crop&w=800&q=80'
+    );
 
 SELECT
     p.product_id,

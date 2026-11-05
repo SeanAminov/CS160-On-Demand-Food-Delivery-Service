@@ -1541,6 +1541,12 @@ main:has(.order-management-card) {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+/* Leaflet's own stylesheet loads after ours and makes markers display: block, which
+   pushed the numbers into the corner. Using both classes wins over that rule. */
+.leaflet-marker-icon.custom-map-pin {
+  display: flex;
+}
+
 .custom-map-pin.hub-pin {
   background: #166534;
 }
@@ -1683,8 +1689,13 @@ main:has(.order-management-card) {
   border: 2px solid #047857;
   box-shadow: 0 2px 8px rgba(4, 120, 87, 0.4);
   font-size: 16px;
-  animation: robot-bounce 2s infinite ease-in-out;
   z-index: 1001 !important;
+}
+
+/* Leaflet places the marker using transform, so the bounce goes on the emoji inside it */
+.custom-map-pin.robot-pin span {
+  display: inline-block;
+  animation: robot-bounce 2s infinite ease-in-out;
 }
 
 @keyframes robot-bounce {
@@ -1694,4 +1705,210 @@ main:has(.order-management-card) {
   50% {
     transform: translateY(-4px);
   }
+}
+
+/* Manager tools: product editing, order details, and transaction history */
+
+/* The product grid needs more room now that products can be edited in it */
+main:has(.inventory-workspace) {
+  max-width: 1300px;
+}
+
+/* Fits three cards across, and drops to fewer on smaller screens */
+.manager-options {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.product-edit-row td {
+  background: #f6f9f6;
+}
+
+.product-edit-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.product-edit-form label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.product-edit-form input,
+.product-edit-form textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #b8cdbd;
+  border-radius: 6px;
+  background: white;
+  font: inherit;
+}
+
+.product-edit-wide {
+  grid-column: 1 / -1;
+}
+
+.product-edit-note,
+.product-edit-form .message {
+  margin: 0;
+  font-size: 13px;
+}
+
+.product-edit-actions {
+  margin-top: 0;
+}
+
+/* Red so it doesn't get mixed up with Edit */
+.button.product-remove-button {
+  border-color: #a12a2a;
+  color: #a12a2a;
+}
+
+.order-row {
+  cursor: pointer;
+}
+
+.order-details-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2f6f3e;
+  font: inherit;
+  font-weight: bold;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.order-details-row > td {
+  background: #f6f9f6;
+}
+
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.order-item-image {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.order-item-text {
+  font-size: 13px;
+}
+
+.order-details-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 14px;
+}
+
+.transaction-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #eeeeee;
+  color: #444444;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.transaction-status.paid {
+  background: #e6f1e8;
+  color: #2f6f3e;
+}
+
+.transaction-status.refunded {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.transaction-status.declined,
+.transaction-status.refund-failed {
+  background: #fee2e2;
+  color: #a12a2a;
+}
+
+.transaction-order-link {
+  color: #2f6f3e;
+  font-weight: bold;
+}
+
+.transaction-id {
+  font-family: Consolas, Menlo, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.transaction-note {
+  display: block;
+  font-size: 12px;
+}
+
+/* Trip simulation under the route map */
+.robot-sim {
+  border: 1px solid #d5e2d8;
+  border-radius: 6px;
+  background: #f9fbf9;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.robot-sim-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.robot-sim-title .muted {
+  font-size: 12px;
+}
+
+.robot-sim-slider {
+  width: 100%;
+  margin: 10px 0 2px;
+  accent-color: #2f6f3e;
+  cursor: pointer;
+}
+
+/* When the robot leaves and gets back, under each end of the timeline */
+.robot-sim-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.robot-sim-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.robot-sim-clock {
+  font-weight: bold;
+}
+
+/* A stop the robot has reached in the simulation */
+.route-stop-card.sim-reached {
+  border-color: #047857;
+  background: #ecfdf5;
+}
+
+.sim-arrival {
+  font-size: 12px;
+  font-weight: bold;
+  color: #047857;
 }

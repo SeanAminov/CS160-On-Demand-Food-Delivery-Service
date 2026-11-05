@@ -4,6 +4,8 @@ const router = express.Router();
 
 const FREE_DELIVERY_LIMIT = 20;
 const DELIVERY_FEE = 10;
+// One robot carries up to 200 lbs, so a cart can't weigh more than that
+const MAX_CART_WEIGHT = 200;
 const TAX_RATE = process.env.TAX_RATE ? Number(process.env.TAX_RATE) : 0.09375;
 
 // The logged in user comes from the session, not from anything the browser sends
@@ -64,6 +66,7 @@ async function buildCart(cartId) {
     items,
     subtotal: Number(subtotal.toFixed(2)),
     totalWeight: Number(totalWeight.toFixed(2)),
+    maxWeight: MAX_CART_WEIGHT,
     deliveryFee,
     taxRate: TAX_RATE,
     taxAmount,
@@ -79,6 +82,24 @@ async function getStock(productId) {
     WHERE p.product_id = ? AND p.active = TRUE
   `, [productId]);
   return rows.length > 0 ? rows[0].quantity : null;
+}
+
+// Gives back a warning if changing this product to newQuantity would make the cart
+// heavier than a robot can carry. Gives back null if it fits.
+async function checkWeight(cartId, productId, newQuantity) {
+  const [others] = await pool.query(`
+    SELECT COALESCE(SUM(p.weight * ci.quantity), 0) AS weight
+    FROM CartItems AS ci
+    JOIN Products AS p ON ci.product_id = p.product_id
+    WHERE ci.cart_id = ? AND ci.product_id <> ?
+  `, [cartId, productId]);
+  const [products] = await pool.query('SELECT weight FROM Products WHERE product_id = ?', [productId]);
+
+  const newWeight = Number((Number(others[0].weight) + Number(products[0].weight) * newQuantity).toFixed(2));
+  if (newWeight > MAX_CART_WEIGHT) {
+    return `Your cart can't go over ${MAX_CART_WEIGHT} lb, since that's all one robot can carry. This would make it ${newWeight.toFixed(2)} lb.`;
+  }
+  return null;
 }
 
 function isValidQuantity(quantity) {
@@ -116,6 +137,10 @@ router.post('/cart/items', async (req, res) => {
     if (newQuantity > stock) {
       return res.status(409).json({ error: `Only ${stock} left in stock.` });
     }
+    const tooHeavy = await checkWeight(cartId, productId, newQuantity);
+    if (tooHeavy) {
+      return res.status(409).json({ error: tooHeavy });
+    }
     if (existing.length > 0) {
       await pool.query(
         'UPDATE CartItems SET quantity = ? WHERE cart_id = ? AND product_id = ?', [newQuantity, cartId, productId]
@@ -141,7 +166,7 @@ router.put('/cart/items/:id', async (req, res) => {
     const cartId = await getCartId(req, res);
     if (!cartId) return;
     const [rows] = await pool.query(
-      'SELECT product_id FROM CartItems WHERE cart_item_id = ? AND cart_id = ?', [req.params.id, cartId]
+      'SELECT product_id, quantity FROM CartItems WHERE cart_item_id = ? AND cart_id = ?', [req.params.id, cartId]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Item not found in your cart.' });
@@ -149,6 +174,13 @@ router.put('/cart/items/:id', async (req, res) => {
     const stock = await getStock(rows[0].product_id);
     if (stock === null || quantity > stock) {
       return res.status(409).json({ error: `Only ${stock ?? 0} left in stock.` });
+    }
+    // Taking some out is always fine, even if the cart is still too heavy
+    if (quantity > rows[0].quantity) {
+      const tooHeavy = await checkWeight(cartId, rows[0].product_id, quantity);
+      if (tooHeavy) {
+        return res.status(409).json({ error: tooHeavy });
+      }
     }
     await pool.query('UPDATE CartItems SET quantity = ? WHERE cart_item_id = ?', [quantity, req.params.id]);
     res.json(await buildCart(cartId));

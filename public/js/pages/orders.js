@@ -1,6 +1,7 @@
 import { money } from '../cart-api.js';
 import { getUser } from '../user.js';
 import { renderOrderTrackingMap } from '../route-map.js';
+import { renderOrderDetails } from '../order-details.js';
 
 export default {
   title: 'My Orders',
@@ -85,7 +86,8 @@ function renderProgressStepper(status) {
   `;
 }
 
-function renderOrders(app, orders) {
+// note is an optional message to show at the top, like after pressing Got My Order
+function renderOrders(app, orders, note = null) {
   if (orders.length === 0) {
     app.innerHTML = `
       <h1>My Orders</h1>
@@ -121,6 +123,7 @@ function renderOrders(app, orders) {
             Our autonomous robot is traveling on designated bike lanes and pedestrian pathways to <b>${activeDeliveryOrder.delivery_address}</b>.
             ${activeDeliveryOrder.estimated_arrival ? `Estimated Arrival: <b>${etaStr}</b>.` : ''}
           </p>
+          <button class="button small primary got-order" data-id="${activeDeliveryOrder.order_id}" style="margin-top: 10px;">Got My Order</button>
         </div>
 
         ${renderProgressStepper(activeDeliveryOrder.status)}
@@ -174,6 +177,9 @@ function renderOrders(app, orders) {
           >
             <i class='bx bx-map-pin'></i> ${order.status === 'Out for Delivery' ? 'View Live Tracking Map' : 'Preview Delivery Route'}
           </button>
+          ${order.status === 'Out for Delivery' ? `
+            <button class="button small primary got-order" data-id="${order.order_id}">Got My Order</button>
+          ` : ''}
         </div>
 
         <div id="items-${order.order_id}" style="display: none; margin-top: 14px;"></div>
@@ -185,6 +191,7 @@ function renderOrders(app, orders) {
   app.innerHTML = `
     <h1>My Orders</h1>
     <p class="muted" style="margin-bottom: 24px;">Track your grocery deliveries from preparation to autonomous robot delivery.</p>
+    ${note ? `<p class="message ${note.success ? 'success' : ''}">${note.text}</p>` : ''}
     ${heroTrackerHtml}
     ${cards}
   `;
@@ -211,28 +218,8 @@ function renderOrders(app, orders) {
       btn.disabled = true;
       btn.textContent = 'Loading items...';
       try {
-        const res = await fetch(`/orders/${orderId}`);
-        const data = await res.json();
-        let itemRows = '';
-        for (const it of data.items || []) {
-          itemRows += `
-            <tr>
-              <td>${it.name}</td>
-              <td>${money(it.unit_price)}</td>
-              <td>${it.quantity}</td>
-              <td>${(it.unit_weight * it.quantity).toFixed(2)} lb</td>
-              <td>${money(it.unit_price * it.quantity)}</td>
-            </tr>
-          `;
-        }
-
-        targetDiv.innerHTML = `
-          <table class="cart" style="margin-top: 6px;">
-            <tr><th>Item</th><th>Unit Price</th><th>Qty</th><th>Weight</th><th>Total</th></tr>
-            ${itemRows}
-          </table>
-        `;
         targetDiv.style.display = 'block';
+        await renderOrderDetails(targetDiv, orderId);
         btn.textContent = 'Hide Order Items';
       } catch (err) {
         targetDiv.innerHTML = `<p class="message">${err.message}</p>`;
@@ -269,6 +256,35 @@ function renderOrders(app, orders) {
         await renderOrderTrackingMap(targetDiv, order);
       } catch (err) {
         targetDiv.innerHTML = `<p class="message error">${err.message}</p>`;
+      }
+    });
+  }
+
+  // The customer presses Got My Order once they have their groceries
+  for (const btn of app.querySelectorAll('.got-order')) {
+    btn.addEventListener('click', async () => {
+      const orderId = btn.dataset.id;
+      if (!confirm(`Mark Order #${orderId} as delivered? Only do this once you have your groceries.`)) return;
+
+      btn.disabled = true;
+      let message;
+      try {
+        const res = await fetch(`/orders/${orderId}/received`, { method: 'POST' });
+        const data = await res.json();
+        message = res.ok
+          ? { text: `Thanks! ${data.message}`, success: true }
+          : { text: data.error, success: false };
+      } catch {
+        message = { text: 'Could not update the order. Please try again.', success: false };
+      }
+
+      // Load the orders again so the new status shows everywhere on the page
+      try {
+        const listRes = await fetch('/orders');
+        renderOrders(app, await listRes.json(), message);
+        window.scrollTo(0, 0);
+      } catch {
+        btn.disabled = false;
       }
     });
   }
