@@ -4,6 +4,8 @@ import { managerNavigation } from '../manager-nav.js';
 let inventoryItems = [];
 let pendingChanges = {};
 let showLowStockOnly = false;
+let productSearch = '';
+let categoryFilter = '';
 // The product being edited ('new' while adding one), and what's been typed into its form so far
 let editingProductId = null;
 let editDraft = null;
@@ -86,10 +88,10 @@ function renderEditRow() {
             >
             <datalist id="edit-category-list">
               ${categories
-                .map(
-                  (category) => `<option value="${escapeHtml(category)}"></option>`
-                )
-                .join('')}
+      .map(
+        (category) => `<option value="${escapeHtml(category)}"></option>`
+      )
+      .join('')}
             </datalist>
           </div>
 
@@ -129,9 +131,8 @@ function renderEditRow() {
             >
           </div>
 
-          ${
-            isNew
-              ? `
+          ${isNew
+      ? `
                 <div>
                   <label for="edit-quantity">Starting Stock</label>
                   <input
@@ -144,8 +145,8 @@ function renderEditRow() {
                   >
                 </div>
               `
-              : ''
-          }
+      : ''
+    }
 
           <div class="product-edit-wide">
             <label for="edit-description">Description</label>
@@ -168,15 +169,14 @@ function renderEditRow() {
             >
           </div>
 
-          ${
-            isNew
-              ? ''
-              : `
+          ${isNew
+      ? ''
+      : `
                 <p class="muted product-edit-wide product-edit-note">
                   Orders already placed keep the price and weight they were bought at.
                 </p>
               `
-          }
+    }
 
           <p id="product-edit-error" class="message product-edit-wide"></p>
 
@@ -202,9 +202,44 @@ function renderInventory(app) {
 
   const lowStockCount = inventoryItems.filter(isLowStock).length;
 
-  const visibleItems = showLowStockOnly
-    ? inventoryItems.filter(isLowStock)
-    : inventoryItems;
+  const categories = [
+    ...new Set(
+      inventoryItems
+        .map((item) => item.category)
+        .filter(Boolean)
+    ),
+  ].sort();
+
+  const searchValue = productSearch
+    .trim()
+    .toLowerCase();
+
+  const visibleItems = inventoryItems.filter((item) => {
+    const matchesLowStock =
+      !showLowStockOnly || isLowStock(item);
+
+    const matchesSearch =
+      !searchValue ||
+      [
+        item.name,
+        item.category,
+        item.description,
+        item.product_id,
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(searchValue);
+
+    const matchesCategory =
+      !categoryFilter ||
+      item.category === categoryFilter;
+
+    return (
+      matchesLowStock &&
+      matchesSearch &&
+      matchesCategory
+    );
+  });
 
   app.innerHTML = `
     <section class="hero">
@@ -229,27 +264,73 @@ function renderInventory(app) {
           </div>
 
           <div class="inventory-header-tools">
-            <span class="inventory-count">
-              ${inventoryItems.length} products,
-              ${lowStockCount} low on stock
-            </span>
+  <div class="inventory-search-control">
+    <label for="product-search">
+      Search products
+    </label>
 
-            <button
-              id="low-stock-toggle"
-              class="button"
-              type="button"
-            >
-              ${showLowStockOnly ? 'Show All Products' : 'Show Low Stock Only'}
-            </button>
+    <input
+      id="product-search"
+      type="search"
+      placeholder="Name, category, or ID"
+      value="${escapeHtml(productSearch)}"
+      autocomplete="off"
+    >
+  </div>
 
-            <button
-              id="add-product-button"
-              class="button primary"
-              type="button"
+  <div class="inventory-category-control">
+    <label for="category-filter">
+      Category
+    </label>
+
+    <select id="category-filter">
+      <option value="">All categories</option>
+
+      ${categories
+      .map(
+        (category) => `
+            <option
+              value="${escapeHtml(category)}"
+              ${category === categoryFilter
+            ? 'selected'
+            : ''
+          }
             >
-              ${editingProductId === 'new' ? 'Close New Product' : 'Add Product'}
-            </button>
-          </div>
+              ${escapeHtml(category)}
+            </option>
+          `
+      )
+      .join('')}
+    </select>
+  </div>
+
+  <span class="inventory-count">
+    ${inventoryItems.length} products,
+    ${lowStockCount} low on stock
+  </span>
+
+  <button
+    id="low-stock-toggle"
+    class="button"
+    type="button"
+  >
+    ${showLowStockOnly
+      ? 'Show All Products'
+      : 'Show Low Stock Only'
+    }
+  </button>
+
+  <button
+    id="add-product-button"
+    class="button primary"
+    type="button"
+  >
+    ${editingProductId === 'new'
+      ? 'Close New Product'
+      : 'Add Product'
+    }
+  </button>
+</div>
         </div>
 
         <p id="product-message" class="message"></p>
@@ -270,21 +351,20 @@ function renderInventory(app) {
             <tbody>
               ${editingProductId === 'new' ? renderEditRow() : ''}
 
-              ${
-                visibleItems.length === 0
-                  ? `
+              ${visibleItems.length === 0
+      ? `
                     <tr>
                       <td colspan="6" class="muted">
-                        No products are low on stock right now.
+                        No products match the current filters.
                       </td>
                     </tr>
                   `
-                  : ''
-              }
+      : ''
+    }
 
               ${visibleItems
-                .map(
-                  (item) => `
+      .map(
+        (item) => `
                     <tr>
                       <td>
                         <strong>${item.name}</strong>
@@ -313,25 +393,23 @@ function renderInventory(app) {
                           aria-label="Quantity for ${item.name}"
                         >
 
-                        ${
-                          pendingChanges[item.product_id]
-                            ? `
+                        ${pendingChanges[item.product_id]
+            ? `
                               <span class="pending-quantity-label">
                                 pending
                               </span>
                             `
-                            : ''
-                        }
+            : ''
+          }
 
-                        ${
-                          isLowStock(item)
-                            ? `
+                        ${isLowStock(item)
+            ? `
                               <span class="low-stock-label">
                                 Low stock (reorder at ${item.reorder_level})
                               </span>
                             `
-                            : ''
-                        }
+            : ''
+          }
                       </td>
 
                       <td>
@@ -375,8 +453,8 @@ function renderInventory(app) {
 
                     ${item.product_id === editingProductId ? renderEditRow() : ''}
                   `
-                )
-                .join('')}
+      )
+      .join('')}
             </tbody>
           </table>
         </div>
@@ -397,34 +475,33 @@ function renderInventory(app) {
           </span>
         </div>
 
-        ${
-          pendingEntries.length === 0
-            ? `
+        ${pendingEntries.length === 0
+      ? `
               <p class="muted">
                 No quantity changes have been selected.
               </p>
             `
-            : `
+      : `
               <div class="pending-inventory-list">
                 ${pendingEntries
-                  .map(([productId, change]) => {
-                    const item = inventoryItems.find(
-                      (currentItem) =>
-                        String(currentItem.product_id) ===
-                        String(productId)
-                    );
+        .map(([productId, change]) => {
+          const item = inventoryItems.find(
+            (currentItem) =>
+              String(currentItem.product_id) ===
+              String(productId)
+          );
 
-                    if (!item) {
-                      return '';
-                    }
+          if (!item) {
+            return '';
+          }
 
-                    const newQuantity =
-                      getPendingQuantity(item);
+          const newQuantity =
+            getPendingQuantity(item);
 
-                    const changeLabel =
-                      change > 0 ? `+${change}` : change;
+          const changeLabel =
+            change > 0 ? `+${change}` : change;
 
-                    return `
+          return `
                       <div class="pending-inventory-row">
                         <strong>${item.name}</strong>
 
@@ -447,8 +524,8 @@ function renderInventory(app) {
                         </button>
                       </div>
                     `;
-                  })
-                  .join('')}
+        })
+        .join('')}
               </div>
 
               <div class="pending-inventory-actions">
@@ -469,7 +546,7 @@ function renderInventory(app) {
                 </button>
               </div>
             `
-        }
+    }
 
         <p id="inventory-message" class="inventory-message">
           Changes are not saved until you select Confirm Updates.
@@ -561,6 +638,41 @@ function bindInventoryEvents(app) {
         renderInventory(app);
       });
     });
+
+  const productSearchInput =
+    app.querySelector('#product-search');
+
+  if (productSearchInput) {
+    productSearchInput.addEventListener('input', (event) => {
+      productSearch = event.target.value;
+
+      const cursorPosition =
+        event.target.selectionStart;
+
+      renderInventory(app);
+
+      const updatedSearchInput =
+        app.querySelector('#product-search');
+
+      updatedSearchInput.focus();
+
+      updatedSearchInput.setSelectionRange(
+        cursorPosition,
+        cursorPosition
+      );
+    });
+  }
+
+  const categoryFilterInput =
+    app.querySelector('#category-filter');
+
+  if (categoryFilterInput) {
+    categoryFilterInput.addEventListener('change', (event) => {
+      categoryFilter = event.target.value;
+      renderInventory(app);
+    });
+  }
+
 
   app
     .querySelectorAll('.product-edit-button')
@@ -849,6 +961,8 @@ export default {
     pendingChanges = {};
     showLowStockOnly = false;
     closeProductEditor();
+    productSearch = '';
+    categoryFilter = '';
 
     app.innerHTML = `
       <section class="hero">
