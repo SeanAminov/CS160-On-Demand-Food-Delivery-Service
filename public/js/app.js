@@ -75,6 +75,7 @@ async function loginUpdate(){
   const welcome = document.getElementById('welcome');
   const login = document.getElementById('login');
   const empLink = document.getElementById('emp-link');
+  const managerLink = document.getElementById('manager-link');
   const accountLink = document.getElementById('account-link');
   try{
     const response = await fetch('/profile');
@@ -91,6 +92,7 @@ async function loginUpdate(){
     welcome.textContent =  `Welcome ${user.role}: ${user.name}`;
     welcome.hidden = false;
     if (empLink) empLink.hidden = !(user.role === 'employee' || user.role === 'manager');
+    if (managerLink) managerLink.hidden = !(user.role === 'manager');
     if (accountLink) accountLink.hidden = false;
     login.textContent = 'Log Out';
   }
@@ -98,6 +100,7 @@ async function loginUpdate(){
     console.error('Can not access info', error);
     welcome.hidden = true;
     if (empLink) empLink.hidden = true;
+    if (managerLink) managerLink.hidden = true;
     if (accountLink) accountLink.hidden = true;
   }
 }

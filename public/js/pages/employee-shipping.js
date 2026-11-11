@@ -103,18 +103,26 @@ export default {
         </p>
 
         <div class="shipping-summary">
-          <strong>
-            Selected:
-            <span id="selected-count">0</span>
-            <span id="selected-label">orders</span>
-          </strong>
+          <div class="shipping-summary-item">
+            <span>Selected orders</span>
+
+            <strong>
+              <span id="selected-count">0</span>
+              <span id="selected-label">orders</span>
+              <small>/ 10 maxiumum</small>
+            </strong>
+          </div>
+
+          <div class="shipping-summary-item">
+          <span>Total weight</span>
 
           <strong>
-            Total weight:
-            <span id="selected-weight">0.00</span>
+            <span id ="selected-weight">0.00</span>
             lb
+            <small>/ 200 lb maximum</small>
           </strong>
         </div>
+      </div>
 
         <div class="shipping-orders">
           ${stagedOrders
@@ -153,24 +161,33 @@ export default {
         </div>
 
         <div class="shipping-assignment">
-          <label for="robot-select">
-            Assign delivery robot
-          </label>
+          <div class="shipping-assignment-copy">
+            <label for="robot-select">
+              Assign delivery robot
+            </label>
 
-          <select id="robot-select">
-            <option value="">
-              Select a robot
-            </option>
-            ${robotOptions}
-          </select>
+            <p class="muted">
+              Choose an available robot for this trip.
+            </p>
+          </div>
 
-          <button
-            id="dispatch-button"
-            class="button primary"
-            disabled
-          >
-            Dispatch Robot
-          </button>
+          <div class="shipping-assignment-controls">
+            <select id="robot-select">
+              <option value="">
+                Select a robot
+              </option>
+
+              ${robotOptions}
+            </select>
+
+            <button
+              id="dispatch-button"
+              class="button primary"
+              disabled
+            >
+              Dispatch Robot
+            </button>
+          </div>
 
           <p id="shipping-message" class="shipping-message"></p>
         </div>

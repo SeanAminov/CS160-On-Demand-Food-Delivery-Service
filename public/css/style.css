@@ -375,128 +375,292 @@ table.cart td {
   }
 }
 
-/* Additional CSS Styles in order to format the packing employee page */
 
-.packing-hero {
-  padding: 24px 32px;
-  margin-bottom: 24px;
+/* Styles for Employee Dashboard */
+
+.employee-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0 32px;
 }
 
-.packing-hero h1 {
-  margin: 0 0 18px;
-  font-size: 36px;
+.employee-summary-card {
+  min-height: 150px;
+  padding: 22px;
+  border-left: 4px solid #2f6f3e;
+  text-align: center;
 }
 
-.packing-hero p {
-  margin: 8px 0;
+.employee-summary-card span {
+  display: block;
+  font-size: 14px;
+  font-weight: bold;
 }
 
-.packing-navigation {
-  margin-top: 0;
-  margin-bottom: 32px;
+.employee-summary-card h2 {
+  margin: 12px 0 6px;
+  color: #222;
+  font-size: 34px;
 }
 
-@media (max-width: 700px) {
-  .packing-hero h1 {
-    font-size: 30px;
+.employee-summary-card small {
+  color: #666;
+  font-size: 13px;
+}
+
+.employee-summary-card-pending {
+  border-left-color: #b45309;
+}
+
+.employee-summary-card-preparing {
+  border-left-color: #1d4ed8;
+}
+
+.employee-summary-card-staged {
+  border-left-color: #6d28d9;
+}
+
+.employee-summary-card-trips {
+  border-left-color: #047857;
+}
+
+@media (max-width: 850px) {
+  .employee-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-/* CSS Styles in order to properly format the shipping employee page */
-
-.shipping-hero {
-  padding: 24px 32px;
-  margin-bottom: 24px;
+@media (max-width: 520px) {
+  .employee-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.shipping-hero h1 {
-  margin: 0 0 18px;
-  font-size: 36px;
+/* Employee Packing */
+
+.employee-navigation {
+  margin: 20px 0 30px;
 }
 
-.shipping-hero p {
-  margin: 8px 0;
-}
-
-.shipping-navigation {
-  margin-top: 0;
-  margin-bottom: 30px;
-}
-
-.shipping-summary {
-  display: flex;
-  flex-wrap: wrap;
+.packing-layout {
   gap: 24px;
-  margin: 18px 0;
-  padding: 14px 16px;
-  border-radius: 8px;
-  background: #eef7f0;
-  color: #2f6f3e;
 }
 
-.shipping-orders {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
+.packing-layout > .card {
+  padding: 24px;
 }
 
-.shipping-order-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid #d5e2d8;
-  border-radius: 10px;
-  background: white;
-  cursor: pointer;
+.packing-layout > .card > h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
 }
 
-.shipping-order-card:hover {
-  border-color: #2f6f3e;
+.packing-layout > .card > .card {
+  border-left: 4px solid #d5e2d8;
+  box-shadow: none;
 }
 
-.shipping-order-card input {
-  width: 18px;
-  height: 18px;
-  margin-top: 4px;
-  accent-color: #2f6f3e;
-}
-
-.shipping-order-card>span {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  align-items: center;
-}
-
-.shipping-order-card>span>strong {
-  flex-basis: 100%;
-  font-size: 18px;
-}
-
-.shipping-order-card .muted {
-  display: inline-block;
-}
-
-.shipping-assignment {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
+.packing-layout form {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid #d5e2d8;
 }
 
-.shipping-assignment label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.packing-layout form label {
+  display: block;
+  margin-bottom: 8px;
   font-weight: bold;
 }
 
+.packing-layout input[type='text'] {
+  min-width: 220px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #b8cdbd;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.packing-layout input[type='text']:focus {
+  outline: 2px solid #2f6f3e;
+  outline-offset: 2px;
+}
+
+.packing-layout .button:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 700px) {
+  .packing-layout input[type='text'] {
+    width: 100%;
+  }
+
+  .packing-layout form .buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.packing-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 22px;
+  color: #333;
+}
+
+.packing-progress-header span {
+  color: #2f6f3e;
+  font-weight: bold;
+}
+
+.packing-progress {
+  width: 100%;
+  height: 10px;
+  margin: 10px 0 22px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #e5eee7;
+}
+
+.packing-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: #2f6f3e;
+  transition: width 0.2s ease;
+}
+
+.packing-item-card {
+  border-left: 4px solid #d5e2d8;
+}
+
+.packing-item-complete {
+  border-left-color: #2f6f3e;
+  background: #f5faf6;
+}
+
+.packing-item-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.packing-item-status {
+  padding: 5px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.packing-item-status.confirmed {
+  background: #e2f2e5;
+  color: #2f6f3e;
+}
+
+.packing-item-status.needs-packing {
+  background: #fff1d4;
+  color: #8a5b00;
+}
+
+.packing-package-card {
+  position: sticky;
+  top: 20px;
+}
+
+.packing-package-card label {
+  display: block;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #d5e2d8;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.packing-package-card label:hover {
+  border-color: #2f6f3e;
+  background: #f5faf6;
+}
+
+@media (max-width: 700px) {
+  .packing-package-card {
+    position: static;
+  }
+
+  .packing-item-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* CSS Styles in order to properly format the shipping employee page */
+
+.shipping-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: #eef7f0;
+  color: #2f6f3e;
+}
+
+.shipping-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.shipping-summary-item > span {
+  color: #666;
+  font-size: 13px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.shipping-summary-item strong {
+  font-size: 22px;
+}
+
+.shipping-summary-item small {
+  color: #666;
+  font-size: 13px;
+  font-weight: normal;
+}
+
+.shipping-assignment {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #d5e2d8;
+}
+
+.shipping-assignment-copy label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.shipping-assignment-copy p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.shipping-assignment-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
 #robot-select {
-  min-width: 150px;
+  min-width: 180px;
+  min-height: 44px;
   padding: 10px;
   border: 1px solid #b8cbbd;
   border-radius: 8px;
@@ -505,29 +669,26 @@ table.cart td {
 }
 
 #dispatch-button {
-  align-self: flex-end;
+  min-height: 44px;
 }
 
 .shipping-message {
   flex-basis: 100%;
-  margin: 4px 0 0;
+  margin: 0;
   font-weight: bold;
 }
 
-.shipping-message.error {
-  color: #a12a2a;
-}
-
-.shipping-message.success {
-  color: #2f6f3e;
-}
-
 @media (max-width: 700px) {
-  .shipping-hero h1 {
-    font-size: 30px;
+  .shipping-summary {
+    grid-template-columns: 1fr;
   }
 
   .shipping-assignment {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .shipping-assignment-controls {
     align-items: stretch;
     flex-direction: column;
   }
@@ -537,6 +698,60 @@ table.cart td {
     width: 100%;
   }
 }
+
+.shipping-orders {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.shipping-order-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #d5e2d8;
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.shipping-order-card:hover {
+  border-color: #2f6f3e;
+  background: #f7fbf8;
+}
+
+.shipping-order-card:has(input:checked) {
+  border: 2px solid #2f6f3e;
+  background: #f0f8f1;
+}
+
+.shipping-order-card input {
+  width: 18px;
+  height: 18px;
+  margin-top: 4px;
+  accent-color: #2f6f3e;
+}
+
+.shipping-order-card > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.shipping-order-card > span > strong {
+  flex-basis: 100%;
+  font-size: 18px;
+}
+
+.shipping-order-card .muted {
+  display: inline-block;
+}
+
 
 /* CSS Style for the manager dashboard page */
 
