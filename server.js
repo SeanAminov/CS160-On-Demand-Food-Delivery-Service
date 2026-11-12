@@ -17,6 +17,7 @@ const deliveryRoutes = require('./routes/deliveries');
 const managerRoutes = require('./routes/manager');
 const productRoutes = require('./routes/products');
 const transactionRoutes = require('./routes/transactions');
+const notificationRoutes = require('./routes/notifications');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -67,6 +68,7 @@ app.use('/', orderRoutes);
 app.use('/', deliveryRoutes);
 app.use('/', productRoutes);
 app.use('/', transactionRoutes);
+app.use('/', notificationRoutes);
 // Only employees and managers can get employee data.
 // This is the real check, since anyone can open the page files in a browser.
 app.use('/employee', loginVerification, roleVerification('employee', 'manager'), employeeRoutes);

@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS Notifications (
     user_id INT NOT NULL,
     order_id INT NULL,
     message VARCHAR(255) NOT NULL,
+    link VARCHAR(100) NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES Users(user_id)
@@ -170,6 +171,28 @@ CREATE TABLE IF NOT EXISTS Notifications (
     FOREIGN KEY (order_id) REFERENCES Orders(order_id)
         ON DELETE SET NULL
 );
+
+-- Add the link column when upgrading an existing database. It's the page a
+-- notification opens when it's clicked, like #/orders.
+SET @link_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'Notifications'
+      AND COLUMN_NAME = 'link'
+);
+SET @add_link_column_sql = IF(
+    @link_column_exists = 0,
+    'ALTER TABLE Notifications ADD COLUMN link VARCHAR(100) NULL AFTER message',
+    'SELECT 1'
+);
+PREPARE add_link_column_statement FROM @add_link_column_sql;
+EXECUTE add_link_column_statement;
+DEALLOCATE PREPARE add_link_column_statement;
+
+-- Notifications saved before links existed were all about a customer's order,
+-- so they open My Orders
+UPDATE Notifications SET link = '#/orders' WHERE link IS NULL AND order_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS Carts (
     cart_id INT AUTO_INCREMENT PRIMARY KEY,

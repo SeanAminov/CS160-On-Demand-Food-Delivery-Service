@@ -134,7 +134,8 @@ Cancelling a paid order refunds it through Stripe. Payments and refunds show up 
     db.js              the MySQL connection, and the setup that runs schema.sql when the server starts
     auth.js            password hashing and the login and role checks
     address.js         checks delivery addresses for checkout and My Account
-    routes/            the API routes (users, cart, orders, deliveries, employee, manager, products, transactions)
+    routes/            the API routes (users, cart, orders, deliveries, employee, manager, products, transactions, notifications)
+    notify.js          saves notifications for customers, employees, and managers
     data/schema.sql    creates the database, tables, and sample products
     public/index.html  the header, nav, and footer that every page shares
     public/css/        styles
@@ -162,10 +163,13 @@ Each page is its own file in `public/js/pages`. The part of the URL after the # 
 * `#/manager-inventory` manager-inventory.js, where managers add, edit, and remove products, change stock, and see what's running low (at or below its reorder level)
 * `#/manager-orders` manager-orders.js, where clicking an order shows the products in it
 * `#/manager-transactions` manager-transactions.js, the payments and refunds from Stripe matched to our orders
+* `#/notifications` notifications.js, the logged in user's notifications
 
 All of these work. Only managers can cancel orders, so employees don't see the Cancel buttons.
 
 Every trip's route map (on the Employee Dashboard, on Waiting to Ship after a robot goes out, and on My Orders) has a Trip Simulation under it. Dragging its timeline moves the robot along the planned route, and it reaches each stop at its ETA. A trip that's out right now starts where the robot would be at this moment and keeps moving in real time. The simulation only moves the robot on the page and never changes an order. The code is in `public/js/robot-simulation.js`.
+
+Notifications show up under Notifications in the header, with the number of unread ones next to it, and opening the page marks them read. Customers get one whenever their order changes (placed, being packed, packed, out for delivery, delivered, failed, or cancelled) and when their card is declined. Employees get one for each new order to pack and when a customer presses Got My Order. Managers get one when a product drops to its low stock level or runs out, and when a delivery fails. Each one links to the page that needs attention. The code that saves them is in `notify.js`.
 
 Pages starting with `#/employee` are only for employees and managers, and `#/manager` is only for managers. `app.js` checks this before showing the page. The server also checks the role before sending any employee data, and that's the check that actually protects it.
 
@@ -195,6 +199,8 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 * `GET /manager/inventory` stock for every product (managers only)
 * `PATCH /manager/inventory/:productId` raise or lower one product's stock (managers only)
 * `GET /transactions` payments and refunds from Stripe, matched to orders by Stripe ID (managers only)
+* `GET /notifications` the 50 newest notifications for whoever is logged in
+* `PUT /notifications/:id/read` mark one of your own notifications as read
 
 The rest of the planned routes are in the API Design section of our Part 2 document.
 

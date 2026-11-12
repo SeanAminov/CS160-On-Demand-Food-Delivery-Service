@@ -1912,3 +1912,70 @@ main:has(.inventory-workspace) {
   font-weight: bold;
   color: #047857;
 }
+
+/* Notifications: the unread number in the header and the Notifications page */
+.notification-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: #f5c542;
+  color: #1f2d1f;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* display above would otherwise show it even when it's hidden */
+.notification-count[hidden] {
+  display: none;
+}
+
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 14px;
+  border: 1px solid #dfe8e1;
+  border-radius: 8px;
+  background: white;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.notification-item:hover {
+  border-color: #2f6f3e;
+}
+
+.notification-item.unread {
+  border-left: 4px solid #2f6f3e;
+  background: #f3f9f4;
+}
+
+.notification-message {
+  flex: 1;
+  min-width: 200px;
+}
+
+.notification-time {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.notification-new {
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #2f6f3e;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+}
