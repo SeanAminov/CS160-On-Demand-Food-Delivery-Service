@@ -4,7 +4,8 @@ function getActiveOrders(orders) {
     (order) =>
       order.status !== 'Delivered' &&
       order.status !== 'Cancelled' &&
-      order.status !== 'Failed'
+      order.status !== 'Failed' &&
+      order.status !== 'Declined'
   );
 }
 

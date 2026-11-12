@@ -36,6 +36,7 @@ function getStatusBadge(status) {
     'Delivered': '#2f6f3e',
     'Cancelled': '#b91c1c',
     'Failed': '#991b1b',
+    'Declined': '#991b1b',
   };
   const color = colors[status] || '#555';
   return `<span style="display: inline-block; padding: 4px 10px; border-radius: 12px; background: ${color}1a; color: ${color}; border: 1px solid ${color}; font-weight: bold; font-size: 13px;">${status}</span>`;
@@ -43,6 +44,14 @@ function getStatusBadge(status) {
 
 // 5-step visual order journey stepper
 function renderProgressStepper(status) {
+  if (status === 'Declined') {
+    return `
+      <div style="padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b; font-size: 13px; margin: 10px 0;">
+        <i class='bx bx-x-circle' style="vertical-align: middle;"></i> Your card was declined, so this order wasn't placed. Nothing was charged.
+      </div>
+    `;
+  }
+
   if (status === 'Cancelled' || status === 'Failed') {
     return `
       <div style="padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b; font-size: 13px; margin: 10px 0;">
@@ -170,13 +179,15 @@ function renderOrders(app, orders, note = null) {
 
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="button small toggle-items" data-id="${order.order_id}">View Order Items</button>
-          <button
-            class="button small ${order.status === 'Out for Delivery' ? 'primary' : ''} view-order-map"
-            data-id="${order.order_id}"
-            data-status="${order.status}"
-          >
-            <i class='bx bx-map-pin'></i> ${order.status === 'Out for Delivery' ? 'View Live Tracking Map' : 'Preview Delivery Route'}
-          </button>
+          ${order.status !== 'Declined' ? `
+            <button
+              class="button small ${order.status === 'Out for Delivery' ? 'primary' : ''} view-order-map"
+              data-id="${order.order_id}"
+              data-status="${order.status}"
+            >
+              <i class='bx bx-map-pin'></i> ${order.status === 'Out for Delivery' ? 'View Live Tracking Map' : 'Preview Delivery Route'}
+            </button>
+          ` : ''}
           ${order.status === 'Out for Delivery' ? `
             <button class="button small primary got-order" data-id="${order.order_id}">Got My Order</button>
           ` : ''}

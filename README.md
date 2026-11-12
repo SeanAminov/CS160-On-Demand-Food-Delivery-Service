@@ -128,6 +128,8 @@ Checkout uses Stripe's card box in test mode. These are Stripe's test cards. Use
 
 Cancelling a paid order refunds it through Stripe. Payments and refunds show up in the Stripe dashboard under Transactions.
 
+When a card is declined, the order is still saved with the status Declined, along with its items, so managers can see who tried and what was in the cart on Order Management and Transaction History. Nothing is charged, the stock doesn't change, and the customer's cart stays the same so they can try another card.
+
 ## Folders
 
     server.js          the Express server

@@ -52,7 +52,8 @@ function getOrderCounts() {
       (order) =>
         order.status !== 'Delivered' &&
         order.status !== 'Cancelled' &&
-        order.status !== 'Failed'
+        order.status !== 'Failed' &&
+        order.status !== 'Declined'
     ).length,
 
     needsAttention: allOrders.filter(
@@ -467,6 +468,7 @@ function renderOrderDashboard(app) {
               <option value="Delivered">Delivered</option>
               <option value="Failed">Failed</option>
               <option value="Cancelled">Cancelled</option>
+              <option value="Declined">Declined</option>
             </select>
           </div>
         </div>

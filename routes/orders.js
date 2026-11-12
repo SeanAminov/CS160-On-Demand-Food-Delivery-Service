@@ -42,7 +42,9 @@ const ALLOWED_TRANSITIONS = {
   'Out for Delivery': ['Delivered', 'Failed'],
   'Delivered': [],
   'Failed': ['Cancelled'],
-  'Cancelled': []
+  'Cancelled': [],
+  // A declined card was never charged, so there's nothing left to do with it
+  'Declined': []
 };
 
 // GET /stripe-key
@@ -164,14 +166,35 @@ router.post('/checkout', loginVerification, async (req, res) => {
         console.error('Stripe error:', err.message);
         return res.status(502).json({ error: 'The payment could not go through. Please try again.' });
       }
-      // Keep a record of the declined payment
+      // Save the order as Declined with its items, so managers can see who tried and
+      // what was in the cart. Nothing was charged, so stock and the cart stay the same.
       const failedTxId = err.payment_intent ? err.payment_intent.id : 'declined_' + Date.now().toString(36);
-      await pool.query(`
+      await conn.beginTransaction();
+      const [declinedRes] = await conn.query(`
+        INSERT INTO Orders (
+          user_id, subtotal, total_weight, delivery_fee, tax_amount, total_price,
+          delivery_address, delivery_lat, delivery_lng, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Declined')
+      `, [
+        userId, subtotal, totalWeight, deliveryFee, taxAmount, totalPrice,
+        location.address, location.lat, location.lng
+      ]);
+      const declinedOrderId = declinedRes.insertId;
+      for (const item of items) {
+        await conn.query(`
+          INSERT INTO OrderItems (order_id, product_id, quantity, unit_price, unit_weight)
+          VALUES (?, ?, ?, ?, ?)
+        `, [declinedOrderId, item.product_id, item.quantity, item.price, item.weight]);
+      }
+      await conn.query(`
         INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
-        VALUES (NULL, ?, ?, 'declined')
-      `, [failedTxId, totalPrice]);
-      await notifyUser(pool, userId, "Your card was declined, so your order wasn't placed. Nothing was charged.", { link: '#/checkout' });
-      return res.status(402).json({ error: `${err.message} Your cart is unchanged.` });
+        VALUES (?, ?, ?, 'declined')
+      `, [declinedOrderId, failedTxId, totalPrice]);
+      await notifyUser(conn, userId, `Your card was declined for Order #${declinedOrderId}, so it wasn't placed. Nothing was charged.`, {
+        orderId: declinedOrderId, link: '#/checkout'
+      });
+      await conn.commit();
+      return res.status(402).json({ error: `${err.message} Your cart is unchanged.`, order_id: declinedOrderId });
     }
 
     // Some test cards ask for an extra check with the bank, which we don't support yet.
