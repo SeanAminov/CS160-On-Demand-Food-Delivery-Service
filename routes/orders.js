@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { loginVerification, roleVerification } = require('../auth');
 const { checkAddress } = require('../address');
+const { notifyUser, notifyRoles, statusMessage } = require('../notify');
 const Stripe = require('stripe');
 const router = express.Router();
 
@@ -131,9 +132,10 @@ router.post('/checkout', loginVerification, async (req, res) => {
 
     // Verify stock availability with row-level locks.
     // This happens before the charge, so nobody pays for something we're out of.
+    const stockBefore = {};
     for (const item of items) {
       const [inv] = await conn.query(
-        'SELECT quantity FROM Inventory WHERE product_id = ? FOR UPDATE',
+        'SELECT quantity, reorder_level FROM Inventory WHERE product_id = ? FOR UPDATE',
         [item.product_id]
       );
       if (inv.length === 0 || inv[0].quantity < item.quantity) {
@@ -142,6 +144,7 @@ router.post('/checkout', loginVerification, async (req, res) => {
           error: `Insufficient stock for "${item.name}". Only ${inv.length > 0 ? inv[0].quantity : 0} available.`
         });
       }
+      stockBefore[item.product_id] = inv[0];
     }
 
     // Charge the card through Stripe. The amount comes from our database, not the browser.
@@ -167,6 +170,7 @@ router.post('/checkout', loginVerification, async (req, res) => {
         INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
         VALUES (NULL, ?, ?, 'declined')
       `, [failedTxId, totalPrice]);
+      await notifyUser(pool, userId, "Your card was declined, so your order wasn't placed. Nothing was charged.", { link: '#/checkout' });
       return res.status(402).json({ error: `${err.message} Your cart is unchanged.` });
     }
 
@@ -215,11 +219,28 @@ router.post('/checkout', loginVerification, async (req, res) => {
     // 4. Clear Customer's Cart
     await conn.query('DELETE FROM CartItems WHERE cart_id = ?', [cartId]);
 
-    // 5. Create customer notification
-    await conn.query(`
-      INSERT INTO Notifications (user_id, order_id, message)
-      VALUES (?, ?, ?)
-    `, [userId, orderId, `Your order #${orderId} has been placed successfully!`]);
+    // 5. Let the customer know, tell the employees there's a new order to pack,
+    // and warn the managers about anything this order ran out or made run low
+    await notifyUser(conn, userId, `Thanks! Order #${orderId} was placed. We'll start packing it soon.`, {
+      orderId, link: '#/orders'
+    });
+    await notifyRoles(conn, ['employee'], `New Order #${orderId} is ready to pack.`, {
+      orderId, link: `#/employee-packing?id=${orderId}`
+    });
+    for (const item of items) {
+      const { quantity: before, reorder_level: lowStockAt } = stockBefore[item.product_id];
+      const after = before - item.quantity;
+      // Only the order that crosses the line sends one, so managers don't get one for every order
+      let warning = null;
+      if (after === 0) {
+        warning = `${item.name} is out of stock.`;
+      } else if (before > lowStockAt && after <= lowStockAt) {
+        warning = `${item.name} is low on stock: ${after} left (low stock at ${lowStockAt}).`;
+      }
+      if (warning) {
+        await notifyRoles(conn, ['manager'], warning, { link: '#/manager-inventory' });
+      }
+    }
 
     await conn.commit();
 
@@ -379,10 +400,7 @@ router.put('/orders/:id/status', loginVerification, roleVerification('employee',
         VALUES (?, ?, ?, 'refunded')
       `, [orderId, refundTxId, orderRows[0].total_price]);
 
-      await conn.query(`
-        INSERT INTO Notifications (user_id, order_id, message)
-        VALUES (?, ?, ?)
-      `, [orderRows[0].user_id, orderId, `Order #${orderId} was cancelled and refunded.`]);
+      await notifyUser(conn, orderRows[0].user_id, statusMessage(orderId, 'Cancelled'), { orderId, link: '#/orders' });
 
       await conn.commit();
       return res.json({ message: 'Order cancelled, inventory restored, and refund recorded.', order_id: orderId, status: 'Cancelled' });
@@ -397,10 +415,12 @@ router.put('/orders/:id/status', loginVerification, roleVerification('employee',
 
   // Standard status transition
   await pool.query('UPDATE Orders SET status = ? WHERE order_id = ?', [targetStatus, orderId]);
-  await pool.query(`
-    INSERT INTO Notifications (user_id, order_id, message)
-    VALUES (?, ?, ?)
-  `, [orderRows[0].user_id, orderId, `Order #${orderId} status changed to ${targetStatus}.`]);
+  await notifyUser(pool, orderRows[0].user_id, statusMessage(orderId, targetStatus), { orderId, link: '#/orders' });
+  if (targetStatus === 'Failed') {
+    await notifyRoles(pool, ['manager'], `Order #${orderId} was marked failed and needs a follow up.`, {
+      orderId, link: `#/manager-orders?id=${orderId}`
+    });
+  }
 
   res.json({ message: `Order status updated to ${targetStatus}.`, order_id: orderId, status: targetStatus });
 });
@@ -438,10 +458,7 @@ router.post('/orders/:id/cancel', loginVerification, roleVerification('manager')
       VALUES (?, ?, ?, 'refunded')
     `, [orderId, refundTxId, orderRows[0].total_price]);
 
-    await conn.query(`
-      INSERT INTO Notifications (user_id, order_id, message)
-      VALUES (?, ?, ?)
-    `, [orderRows[0].user_id, orderId, `Order #${orderId} was cancelled and refunded.`]);
+    await notifyUser(conn, orderRows[0].user_id, statusMessage(orderId, 'Cancelled'), { orderId, link: '#/orders' });
 
     await conn.commit();
     res.json({ message: 'Order successfully cancelled and inventory restored.', order_id: orderId, status: 'Cancelled' });
@@ -479,6 +496,9 @@ router.post('/orders/:id/received', loginVerification, roleVerification('custome
     if (result.affectedRows === 0) {
       return res.status(400).json({ error: 'You can only confirm an order while it is out for delivery.' });
     }
+    await notifyRoles(pool, ['employee'], `The customer confirmed they got Order #${orderId}.`, {
+      orderId, link: '#/employee'
+    });
 
     res.json({ message: `Order #${orderId} is marked as delivered.`, order_id: orderId, status: 'Delivered' });
   } catch (err) {

@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { loginVerification, roleVerification } = require('../auth');
 const { getOptimizedRoute } = require('../maps');
+const { notifyUser, notifyRoles } = require('../notify');
 const router = express.Router();
 
 const MAX_TRIP_ORDERS = 10;
@@ -119,10 +120,9 @@ router.post('/deliveries/batches', loginVerification, roleVerification('employee
         UPDATE Orders SET status = 'Out for Delivery' WHERE order_id = ?
       `, [order.order_id]);
 
-      await conn.query(`
-        INSERT INTO Notifications (user_id, order_id, message)
-        VALUES (?, ?, ?)
-      `, [order.user_id, order.order_id, `Order #${order.order_id} is out for delivery with our autonomous robot (Stop #${stopSeq})!`]);
+      await notifyUser(conn, order.user_id, `Order #${order.order_id} is out for delivery with our autonomous robot (Stop #${stopSeq})!`, {
+        orderId: order.order_id, link: '#/orders'
+      });
     }
 
     await conn.commit();
@@ -271,9 +271,16 @@ router.put('/deliveries/:id/complete', loginVerification, roleVerification('empl
       const msg = orderStatus === 'Delivered'
         ? `Order #${order.order_id} has been delivered by our robot!`
         : `Order #${order.order_id} delivery could not be completed. An employee will follow up.`;
-      await conn.query('INSERT INTO Notifications (user_id, order_id, message) VALUES (?, ?, ?)', [
-        order.user_id, order.order_id, msg
-      ]);
+      await notifyUser(conn, order.user_id, msg, { orderId: order.order_id, link: '#/orders' });
+    }
+
+    // A failed trip needs a manager to follow up with those customers
+    if (orderStatus === 'Failed' && orders.length > 0) {
+      const orderList = orders.map((order) => `#${order.order_id}`).join(', ');
+      const which = orders.length === 1 ? `Order ${orderList} needs` : `Orders ${orderList} need`;
+      await notifyRoles(conn, ['manager'], `Trip #${deliveryId} couldn't finish. ${which} a follow up.`, {
+        link: '#/manager-orders'
+      });
     }
 
     await conn.commit();

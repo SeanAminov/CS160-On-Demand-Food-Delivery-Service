@@ -14,7 +14,9 @@ import managerTransactions from './pages/manager-transactions.js';
 import register from './pages/register.js';
 import account from './pages/account.js';
 import forgotPassword from './pages/forgot-password.js';
+import notifications from './pages/notifications.js';
 import { getUser } from './user.js';
+import { refreshNotificationCount } from './notification-count.js';
 
 
 
@@ -36,6 +38,7 @@ const pages = {
   '/manager-orders': managerOrders,
   '/forgot-password': forgotPassword,
   '/manager-transactions': managerTransactions,
+  '/notifications': notifications,
 };
 
 // Pages only some roles can open. Any page starting with /employee is covered,
@@ -77,13 +80,16 @@ async function loginUpdate(){
   const empLink = document.getElementById('emp-link');
   const managerLink = document.getElementById('manager-link');
   const accountLink = document.getElementById('account-link');
+  const notificationsLink = document.getElementById('notifications-link');
   try{
     const response = await fetch('/profile');
     if (!response.ok){
       loggedIn = false;
       welcome.hidden = true;
       if (empLink) empLink.hidden = true;
+      if (managerLink) managerLink.hidden = true;
       if (accountLink) accountLink.hidden = true;
+      if (notificationsLink) notificationsLink.hidden = true;
       login.textContent = 'Log In';
       return;
     }
@@ -94,7 +100,9 @@ async function loginUpdate(){
     if (empLink) empLink.hidden = !(user.role === 'employee' || user.role === 'manager');
     if (managerLink) managerLink.hidden = !(user.role === 'manager');
     if (accountLink) accountLink.hidden = false;
+    if (notificationsLink) notificationsLink.hidden = false;
     login.textContent = 'Log Out';
+    refreshNotificationCount();
   }
   catch (error){
     console.error('Can not access info', error);
@@ -102,8 +110,14 @@ async function loginUpdate(){
     if (empLink) empLink.hidden = true;
     if (managerLink) managerLink.hidden = true;
     if (accountLink) accountLink.hidden = true;
+    if (notificationsLink) notificationsLink.hidden = true;
   }
 }
+
+// Check for new notifications every 30 seconds while someone is logged in
+setInterval(() => {
+  if (loggedIn) refreshNotificationCount();
+}, 30000);
 document.getElementById('login').addEventListener('click', async (e) =>{
   if (!loggedIn) return;
   e.preventDefault();
