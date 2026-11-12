@@ -2336,6 +2336,12 @@ main:has(.inventory-workspace) {
   max-width: 1300px;
 }
 
+/* Order Management and Transaction History need the same room, or the order
+   table's Cancel buttons end up past the right edge of the page */
+main:has(.order-management-card) {
+  max-width: 1300px;
+}
+
 /* Fits three cards across, and drops to fewer on smaller screens */
 .manager-options {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
