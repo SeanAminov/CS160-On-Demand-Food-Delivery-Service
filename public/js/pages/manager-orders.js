@@ -3,6 +3,7 @@ import { managerNavigation } from '../manager-nav.js';
 
 let allOrders = [];
 let searchTerm = '';
+let statusFilter = '';
 let openOrderId = null;
 
 const cancellableStatuses = [
@@ -13,10 +14,6 @@ const cancellableStatuses = [
 
 function getFilteredOrders() {
   const searchValue = searchTerm.trim().toLowerCase();
-
-  if (!searchValue) {
-    return allOrders;
-  }
 
   return allOrders.filter((order) => {
     const searchableText = [
@@ -29,8 +26,61 @@ function getFilteredOrders() {
       .join(' ')
       .toLowerCase();
 
-    return searchableText.includes(searchValue);
+    const matchesSearch =
+      !searchValue ||
+      searchableText.includes(searchValue);
+
+    const matchesStatus =
+      !statusFilter ||
+      order.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
   });
+}
+
+function getStatusClass(status) {
+  return status
+    .toLowerCase()
+    .replaceAll(' ', '-');
+}
+
+function getOrderCounts() {
+  return {
+    total: allOrders.length,
+
+    active: allOrders.filter(
+      (order) =>
+        order.status !== 'Delivered' &&
+        order.status !== 'Cancelled' &&
+        order.status !== 'Failed'
+    ).length,
+
+    needsAttention: allOrders.filter(
+      (order) =>
+        order.status === 'Pending' ||
+        order.status === 'Preparing'
+    ).length,
+
+    cancelled: allOrders.filter(
+      (order) => order.status === 'Cancelled'
+    ).length,
+  };
+}
+
+function updateOrderSummary(app) {
+  const counts = getOrderCounts();
+
+  app.querySelector('#total-orders-count')
+    .textContent = counts.total;
+
+  app.querySelector('#active-orders-count')
+    .textContent = counts.active;
+
+  app.querySelector('#attention-orders-count')
+    .textContent = counts.needsAttention;
+
+  app.querySelector('#cancelled-orders-count')
+    .textContent = counts.cancelled;
 }
 
 function renderOrderResults(app) {
@@ -39,12 +89,12 @@ function renderOrderResults(app) {
   const countElement = app.querySelector('#order-count');
 
   countElement.textContent =
-    `${orders.length} order${orders.length === 1 ? '' : 's'} found`;
+    `Showing ${orders.length} of ${allOrders.length} orders`;
 
   if (orders.length === 0) {
     resultsContainer.innerHTML = `
       <p class="muted order-empty-message">
-        No orders match your search.
+        No orders match the current search or filter.
       </p>
     `;
     return;
@@ -71,17 +121,29 @@ function renderOrderResults(app) {
               const canCancel =
                 cancellableStatuses.includes(order.status);
 
-              const isOpen = order.order_id === openOrderId;
+              const isOpen =
+                order.order_id === openOrderId;
 
               return `
-                <tr class="order-row" data-order-id="${order.order_id}">
+                <tr
+                  class="order-row ${
+                    isOpen ? 'order-row-open' : ''
+                  }"
+                  data-order-id="${order.order_id}"
+                >
                   <td>
                     <button
                       class="order-details-toggle"
                       type="button"
                       aria-expanded="${isOpen}"
                     >
-                      ${isOpen ? '▾' : '▸'} #${order.order_id}
+                      <span class="order-toggle-icon">
+                        ${isOpen ? '▾' : '▸'}
+                      </span>
+
+                      <strong>
+                        #${order.order_id}
+                      </strong>
                     </button>
                   </td>
 
@@ -104,19 +166,32 @@ function renderOrderResults(app) {
                   </td>
 
                   <td>
-                    <span class="order-status">
+                    <span
+                      class="
+                        order-status
+                        order-status-${getStatusClass(order.status)}
+                      "
+                    >
                       ${order.status}
                     </span>
                   </td>
 
                   <td>
-                    $${Number(order.total_price || 0).toFixed(2)}
+                    <strong>
+                      $${Number(order.total_price || 0).toFixed(2)}
+                    </strong>
+
+                    <span class="order-weight muted">
+                      ${Number(order.total_weight || 0).toFixed(2)} lb
+                    </span>
                   </td>
 
                   <td>
-                    ${new Date(
-                      order.created_at
-                    ).toLocaleString()}
+                    <span class="order-date">
+                      ${new Date(
+                        order.created_at
+                      ).toLocaleString()}
+                    </span>
                   </td>
 
                   <td>
@@ -129,7 +204,7 @@ function renderOrderResults(app) {
                       ${
                         order.status === 'Cancelled'
                           ? 'Cancelled'
-                          : 'Cancel Order'
+                          : 'Cancel'
                       }
                     </button>
                   </td>
@@ -140,7 +215,10 @@ function renderOrderResults(app) {
                     ? `
                       <tr class="order-details-row">
                         <td colspan="7">
-                          <div id="order-details-panel"></div>
+                          <div
+                            id="order-details-panel"
+                            class="order-details-panel"
+                          ></div>
                         </td>
                       </tr>
                     `
@@ -159,42 +237,60 @@ function renderOrderResults(app) {
   showOpenOrder(app);
 }
 
-// Clicking an order opens its products under the row, and clicking it again closes them
 function bindOrderRows(app) {
   app.querySelectorAll('.order-row').forEach((row) => {
     row.addEventListener('click', (event) => {
-      if (event.target.closest('.order-cancel-button')) {
+      if (
+        event.target.closest('.order-cancel-button')
+      ) {
         return;
       }
 
       const orderId = Number(row.dataset.orderId);
 
-      openOrderId = orderId === openOrderId ? null : orderId;
+      openOrderId =
+        orderId === openOrderId
+          ? null
+          : orderId;
+
       renderOrderResults(app);
     });
   });
 }
 
 async function showOpenOrder(app) {
-  const panel = app.querySelector('#order-details-panel');
+  const panel = app.querySelector(
+    '#order-details-panel'
+  );
 
-  if (!panel) {
+  if (!panel || !openOrderId) {
     return;
   }
 
   try {
-    await renderOrderDetails(panel, openOrderId, true);
+    await renderOrderDetails(
+      panel,
+      openOrderId,
+      true
+    );
   } catch (error) {
-    panel.innerHTML = '<p class="message"></p>';
-    panel.querySelector('.message').textContent = error.message;
+    panel.innerHTML = `
+      <p class="message">
+        ${error.message}
+      </p>
+    `;
   }
 }
 
 function bindCancelButtons(app) {
   app
-    .querySelectorAll('.order-cancel-button:not(:disabled)')
+    .querySelectorAll(
+      '.order-cancel-button:not(:disabled)'
+    )
     .forEach((button) => {
-      button.addEventListener('click', async () => {
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation();
+
         const orderId = button.dataset.orderId;
 
         const confirmed = window.confirm(
@@ -220,7 +316,8 @@ function bindCancelButtons(app) {
 
           if (!response.ok) {
             throw new Error(
-              result.error || 'Could not cancel order.'
+              result.error ||
+                'Could not cancel order.'
             );
           }
 
@@ -234,19 +331,25 @@ function bindCancelButtons(app) {
             order.status = 'Cancelled';
           }
 
+          updateOrderSummary(app);
           renderOrderResults(app);
 
-          const message = app.querySelector('#order-message');
+          const message = app.querySelector(
+            '#order-message'
+          );
 
           message.textContent =
             `Order #${orderId} was cancelled successfully.`;
+
           message.className =
             'order-message success';
         } catch (error) {
           button.disabled = false;
-          button.textContent = 'Cancel Order';
+          button.textContent = 'Cancel';
 
-          const message = app.querySelector('#order-message');
+          const message = app.querySelector(
+            '#order-message'
+          );
 
           message.textContent = error.message;
           message.className =
@@ -256,36 +359,84 @@ function bindCancelButtons(app) {
     });
 }
 
-export default {
-  title: 'Order Management',
+function bindOrderFilters(app) {
+  app
+    .querySelector('#order-search')
+    .addEventListener('input', (event) => {
+      searchTerm = event.target.value;
+      openOrderId = null;
+      renderOrderResults(app);
+    });
 
-  async show(app) {
-    searchTerm = '';
+  app
+    .querySelector('#status-filter')
+    .addEventListener('change', (event) => {
+      statusFilter = event.target.value;
+      openOrderId = null;
+      renderOrderResults(app);
+    });
+}
 
-    // Transaction History links here with the order to open, like #/manager-orders?id=12
-    const queryString = window.location.hash.split('?')[1] || '';
-    openOrderId = Number(new URLSearchParams(queryString).get('id')) || null;
+function renderOrderDashboard(app) {
+  const counts = getOrderCounts();
 
-    app.innerHTML = `
-      <section class="hero">
-        <h1>Order Management</h1>
+  app.innerHTML = `
+    <section class="hero">
+      <h1>Order Management</h1>
 
-        <p class="muted">
-          Click an order to see its products. Cancel orders when necessary.
-        </p>
-      </section>
+      <p class="muted">
+        Review customer orders, inspect products, and
+        cancel eligible orders.
+      </p>
+    </section>
 
-      ${managerNavigation('#/manager-orders')}
+    ${managerNavigation('#/manager-orders')}
 
-      <section class="card order-management-card">
-        <div class="order-management-header">
-          <div>
-            <h2>Customer Orders</h2>
-            <p id="order-count" class="muted">
-              Loading orders...
-            </p>
-          </div>
+    <section class="order-management-summary">
+      <div class="card order-summary-card">
+        <p class="muted">Total Orders</p>
+        <h2 id="total-orders-count">
+          ${counts.total}
+        </h2>
+        <small>Orders in the database</small>
+      </div>
 
+      <div class="card order-summary-card">
+        <p class="muted">Active Orders</p>
+        <h2 id="active-orders-count">
+          ${counts.active}
+        </h2>
+        <small>Orders still being processed</small>
+      </div>
+
+      <div class="card order-summary-card">
+        <p class="muted">Needs Attention</p>
+        <h2 id="attention-orders-count">
+          ${counts.needsAttention}
+        </h2>
+        <small>Pending or preparing</small>
+      </div>
+
+      <div class="card order-summary-card">
+        <p class="muted">Cancelled Orders</p>
+        <h2 id="cancelled-orders-count">
+          ${counts.cancelled}
+        </h2>
+        <small>Orders marked cancelled</small>
+      </div>
+    </section>
+
+    <section class="card order-management-card">
+      <div class="order-management-header">
+        <div>
+          <h2>Customer Orders</h2>
+
+          <p id="order-count" class="muted">
+            Loading orders...
+          </p>
+        </div>
+
+        <div class="order-filter-controls">
           <div class="order-search-container">
             <label for="order-search">
               Search orders
@@ -295,15 +446,64 @@ export default {
               id="order-search"
               class="order-search-input"
               type="search"
-              placeholder="Name, email, order ID, or address"
+              placeholder="Name, email, ID, or address"
               autocomplete="off"
             />
           </div>
+
+          <div class="order-status-filter">
+            <label for="status-filter">
+              Status
+            </label>
+
+            <select id="status-filter">
+              <option value="">All statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Preparing">Preparing</option>
+              <option value="Staged">Staged</option>
+              <option value="Out for Delivery">
+                Out for Delivery
+              </option>
+              <option value="Delivered">Delivered</option>
+              <option value="Failed">Failed</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
         </div>
+      </div>
 
-        <p id="order-message" class="order-message"></p>
+      <p id="order-message" class="order-message"></p>
 
-        <div id="order-results"></div>
+      <div id="order-results"></div>
+    </section>
+  `;
+
+  renderOrderResults(app);
+  bindOrderFilters(app);
+}
+
+export default {
+  title: 'Order Management',
+
+  async show(app) {
+    searchTerm = '';
+    statusFilter = '';
+
+    const queryString =
+      window.location.hash.split('?')[1] || '';
+
+    openOrderId =
+      Number(
+        new URLSearchParams(queryString).get('id')
+      ) || null;
+
+    app.innerHTML = `
+      <section class="hero">
+        <h1>Order Management</h1>
+
+        <p class="muted">
+          Loading customer orders...
+        </p>
       </section>
     `;
 
@@ -316,20 +516,17 @@ export default {
 
       allOrders = await response.json();
 
-      renderOrderResults(app);
+      renderOrderDashboard(app);
 
-      const openRow = app.querySelector('.order-details-row');
+      const openRow = app.querySelector(
+        '.order-details-row'
+      );
 
       if (openRow) {
-        openRow.scrollIntoView({ block: 'center' });
-      }
-
-      app
-        .querySelector('#order-search')
-        .addEventListener('input', (event) => {
-          searchTerm = event.target.value;
-          renderOrderResults(app);
+        openRow.scrollIntoView({
+          block: 'center',
         });
+      }
     } catch (error) {
       app.innerHTML = `
         <section class="hero">

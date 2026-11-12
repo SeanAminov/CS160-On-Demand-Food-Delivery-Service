@@ -44,24 +44,31 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
     ${feedbackMsg ? `<p class="message" style="color: ${isError ? '#a12a2a' : '#2f6f3e'}; font-weight: bold;">${feedbackMsg}</p>` : ''}
 
     <!-- Quick Stats Bar -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px;">
-      <div class="card" style="text-align: center; border-left: 4px solid #b45309;">
-        <span class="muted" style="font-size: 13px;">Pending Packing</span>
-        <h2 style="margin: 6px 0; color: #b45309;">${pendingOrders.length}</h2>
+    <section class="employee-summary-grid">
+      <div class="card employee-summary-card employee-summary-card-pending">
+        <span class="muted">Pending Packing</span>
+        <h2>${pendingOrders.length}</h2>
+        <small>Orders waiting to be packed</small>
       </div>
-      <div class="card" style="text-align: center; border-left: 4px solid #1d4ed8;">
-        <span class="muted" style="font-size: 13px;">Currently Preparing</span>
-        <h2 style="margin: 6px 0; color: #1d4ed8;">${preparingOrders.length}</h2>
+
+      <div class="card employee-summary-card employee-summary-card-preparing">
+        <span class="muted">Currently Preparing</span>
+        <h2>${preparingOrders.length}</h2>
+        <small>Orders being packed</small>
       </div>
-      <div class="card" style="text-align: center; border-left: 4px solid #6d28d9;">
-        <span class="muted" style="font-size: 13px;">Staged for Robot</span>
-        <h2 style="margin: 6px 0; color: #6d28d9;">${stagedOrders.length} (${stagedWeightTotal.toFixed(1)} lb)</h2>
+
+      <div class="card employee-summary-card employee-summary-card-staged">
+        <span class="muted">Staged for Robot</span>
+        <h2>${stagedOrders.length}</h2>
+        <small>${stagedWeightTotal.toFixed(1)} lb ready to ship</small>
       </div>
-      <div class="card" style="text-align: center; border-left: 4px solid #047857;">
-        <span class="muted" style="font-size: 13px;">Active Robot Trips</span>
-        <h2 style="margin: 6px 0; color: #047857;">${activeTrips.length}</h2>
+
+      <div class="card employee-summary-card employee-summary-card-trips">
+        <span class="muted">Active Robot Trips</span>
+        <h2>${activeTrips.length}</h2>
+        <small>Trips currently in progress</small>
       </div>
-    </div>
+    </section>
 
     <!-- Section 1: Robot Delivery Dispatch -->
     <div class="hero" style="background: #eef7f0; border: 1px solid #c2e2c8; margin-bottom: 30px;">
