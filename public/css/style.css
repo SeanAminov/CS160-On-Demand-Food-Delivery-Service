@@ -1474,7 +1474,8 @@ table.cart td {
 }
 
 .order-status-failed,
-.order-status-cancelled {
+.order-status-cancelled,
+.order-status-declined {
   background: #f9dddd;
   color: #a12622;
 }
@@ -2332,6 +2333,12 @@ This provides a sharper look than we had before */
 
 /* The product grid needs more room now that products can be edited in it */
 main:has(.inventory-workspace) {
+  max-width: 1300px;
+}
+
+/* Order Management and Transaction History need the same room, or the order
+   table's Cancel buttons end up past the right edge of the page */
+main:has(.order-management-card) {
   max-width: 1300px;
 }
 

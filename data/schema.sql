@@ -83,13 +83,33 @@ CREATE TABLE IF NOT EXISTS Orders (
     delivery_lng DECIMAL(9,6) NOT NULL,
     status ENUM(
         'Pending', 'Preparing', 'Staged', 'Out for Delivery',
-        'Delivered', 'Failed', 'Cancelled'
+        'Delivered', 'Failed', 'Cancelled', 'Declined'
     ) NOT NULL DEFAULT 'Pending',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES Users(user_id)
 );
+
+-- Add the Declined status when upgrading an existing database. When a card is
+-- declined, the order is still saved as Declined so managers can see who tried
+-- and what was in the cart.
+SET @declined_status_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'Orders'
+      AND COLUMN_NAME = 'status'
+      AND COLUMN_TYPE LIKE '%''Declined''%'
+);
+SET @add_declined_status_sql = IF(
+    @declined_status_exists = 0,
+    'ALTER TABLE Orders MODIFY COLUMN status ENUM(''Pending'', ''Preparing'', ''Staged'', ''Out for Delivery'', ''Delivered'', ''Failed'', ''Cancelled'', ''Declined'') NOT NULL DEFAULT ''Pending''',
+    'SELECT 1'
+);
+PREPARE add_declined_status_statement FROM @add_declined_status_sql;
+EXECUTE add_declined_status_statement;
+DEALLOCATE PREPARE add_declined_status_statement;
 
 CREATE TABLE IF NOT EXISTS OrderItems (
     order_item_id INT AUTO_INCREMENT PRIMARY KEY,
