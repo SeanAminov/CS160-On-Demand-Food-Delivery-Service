@@ -51,7 +51,8 @@ function getOrderCounts() {
     active: allOrders.filter(
       (order) =>
         order.status !== 'Delivered' &&
-        order.status !== 'Cancelled'
+        order.status !== 'Cancelled' &&
+        order.status !== 'Failed'
     ).length,
 
     needsAttention: allOrders.filter(

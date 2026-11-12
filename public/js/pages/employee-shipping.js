@@ -109,7 +109,7 @@ export default {
             <strong>
               <span id="selected-count">0</span>
               <span id="selected-label">orders</span>
-              <small>/ 10 maxiumum</small>
+              <small>/ 10 maximum</small>
             </strong>
           </div>
 

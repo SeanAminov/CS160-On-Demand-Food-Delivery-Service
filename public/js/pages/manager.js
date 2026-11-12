@@ -1,14 +1,17 @@
+// A failed order isn't moving anymore, so it doesn't count as active
 function getActiveOrders(orders) {
   return orders.filter(
     (order) =>
       order.status !== 'Delivered' &&
-      order.status !== 'Cancelled'
+      order.status !== 'Cancelled' &&
+      order.status !== 'Failed'
   );
 }
 
+// Same rule as the Products and Inventory page: each product has its own low stock level
 function getLowStockItems(inventory) {
   return inventory.filter(
-    (item) => Number(item.quantity) <= 5
+    (item) => Number(item.quantity) <= Number(item.reorder_level)
   );
 }
 
@@ -46,25 +49,25 @@ export default {
         <div class="manager-summary-grid">
           <div class="card manager-summary-card">
             <p class="muted">Active Orders</p>
-            <h2 id="active-orders-count">—</h2>
+            <h2 id="active-orders-count">...</h2>
             <small>Orders still being processed</small>
           </div>
 
           <div class="card manager-summary-card">
             <p class="muted">Low Stock Items</p>
-            <h2 id="low-stock-count">—</h2>
-            <small>Items with 5 or fewer units</small>
+            <h2 id="low-stock-count">...</h2>
+            <small>Items at or below their low stock level</small>
           </div>
 
           <div class="card manager-summary-card">
             <p class="muted">Staged Orders</p>
-            <h2 id="staged-orders-count">—</h2>
+            <h2 id="staged-orders-count">...</h2>
             <small>Orders waiting for delivery</small>
           </div>
 
           <div class="card manager-summary-card">
             <p class="muted">Active Trips</p>
-            <h2 id="active-trips-count">—</h2>
+            <h2 id="active-trips-count">...</h2>
             <small>Robot trips in progress</small>
           </div>
         </div>
@@ -84,15 +87,15 @@ export default {
             class="card manager-tool-card"
             href="#/manager-inventory"
           >
-            <h2>Inventory Adjustment</h2>
+            <h2>Products and Inventory</h2>
 
             <p class="muted">
-              Review current quantities and prepare changes
-              before saving them to the database.
+              Add, edit, and remove products, and change
+              how many are in stock.
             </p>
 
             <span class="manager-tool-link">
-              Open inventory →
+              Open products →
             </span>
           </a>
 
@@ -109,6 +112,22 @@ export default {
 
             <span class="manager-tool-link">
               Manage orders →
+            </span>
+          </a>
+
+          <a
+            class="card manager-tool-card"
+            href="#/manager-transactions"
+          >
+            <h2>Transaction History</h2>
+
+            <p class="muted">
+              See payments and refunds from Stripe,
+              matched to each order.
+            </p>
+
+            <span class="manager-tool-link">
+              View transactions →
             </span>
           </a>
         </div>
@@ -195,10 +214,9 @@ export default {
 
       const lowStockItems = getLowStockItems(inventory);
 
+      // Trips end as Completed or Failed, so only the ones still out count
       const activeTrips = deliveries.filter(
-        (delivery) =>
-          delivery.delivery_status !== 'Delivered' &&
-          delivery.delivery_status !== 'Failed'
+        (delivery) => delivery.delivery_status === 'Out for Delivery'
       );
 
       app.querySelector('#active-orders-count')
