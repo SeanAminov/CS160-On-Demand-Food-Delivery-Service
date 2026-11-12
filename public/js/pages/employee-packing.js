@@ -6,10 +6,10 @@ export default {
     const queryString = window.location.hash.split('?')[1] || '';
     const params = new URLSearchParams(queryString);
     const orderId = params.get('id');
-    
+
     if (orderId) {
-        await renderPackingOrder(app, orderId);
-        return;
+      await renderPackingOrder(app, orderId);
+      return;
     }
 
     app.innerHTML = `
@@ -90,8 +90,8 @@ export default {
 
           <tbody>
             ${packingOrders
-              .map(
-                (order) => `
+          .map(
+            (order) => `
                   <tr>
                     <td>
                       <strong>#${order.order_id}</strong>
@@ -113,8 +113,8 @@ export default {
 
                     <td>
                       ${new Date(
-                        order.created_at
-                      ).toLocaleString()}
+              order.created_at
+            ).toLocaleString()}
                     </td>
 
                     <td>
@@ -127,8 +127,8 @@ export default {
                     </td>
                   </tr>
                 `
-              )
-              .join('')}
+          )
+          .join('')}
           </tbody>
         </table>
       `;
@@ -217,7 +217,7 @@ async function renderPackingOrder(app, orderId) {
       order.status = status;
     }
 
-    function renderPackingPage(message = '', isError = false) {
+    function renderPackingPage(message = '', isError = false, focusProductInput = false) {
       const confirmedCount = order.items.reduce(
         (total, item) =>
           total + confirmedQuantities[item.product_id],
@@ -228,6 +228,9 @@ async function renderPackingOrder(app, orderId) {
         (total, item) => total + item.quantity,
         0
       );
+
+      const progressPercent = requiredCount === 0 ? 0 : Math.round(
+        (confirmedCount / requiredCount) * 100);
 
       app.innerHTML = `
         <section class="hero">
@@ -257,14 +260,13 @@ async function renderPackingOrder(app, orderId) {
           </a>
         </nav>
 
-        ${
-          message
-            ? `
+        ${message
+          ? `
               <p class="message ${isError ? 'error' : ''}">
                 ${message}
               </p>
             `
-            : ''
+          : ''
         }
 
         <div class="packing-layout">
@@ -275,46 +277,59 @@ async function renderPackingOrder(app, orderId) {
               Confirm each item before staging the order.
             </p>
 
-            <p>
+            <div class="packing-progress-header">
               <strong>
-                ${confirmedCount} / ${requiredCount}
+                ${confirmedCount} / ${requiredCount} items confirmed
               </strong>
-              items confirmed
-            </p>
 
-            ${order.items
-              .map((item) => {
-                const confirmed =
-                  confirmedQuantities[item.product_id];
+              <span>${progressPercent}%</span>
+            </div>
 
-                const complete = confirmed >= item.quantity;
+            <div class="packing-progress">
+              <div
+                class="packing-progress-bar"
+                style="width: ${progressPercent}%"
+              ></div>
+            </div>
 
-                return `
-                  <div class="card">
+                    ${order.items
+          .map((item) => {
+            const confirmed =
+              confirmedQuantities[item.product_id];
+
+            const complete =
+              confirmed >= item.quantity;
+
+            return `
+                <div class="card packing-item-card ${complete ? 'packing-item-complete' : ''
+              }">
+                  <div class="packing-item-heading">
                     <strong>${item.name}</strong>
 
-                    <p class="muted">
-                      Product ID: ${item.product_id}
-                    </p>
-
-                    <p class="muted">
-                      Required quantity: ${item.quantity}
-                    </p>
-
-                    <p>
-                      Confirmed:
-                      <strong>
-                        ${confirmed} / ${item.quantity}
-                      </strong>
-                    </p>
-
-                    <span class="order-status">
+                    <span class="packing-item-status ${complete ? 'confirmed' : 'needs-packing'
+              }">
                       ${complete ? 'Confirmed' : 'Needs Packing'}
                     </span>
                   </div>
-                `;
-              })
-              .join('')}
+
+                  <p class="muted">
+                    Product ID: ${item.product_id}
+                  </p>
+
+                  <p class="muted">
+                    Required quantity: ${item.quantity}
+                  </p>
+
+                  <p>
+                    Confirmed:
+                    <strong>
+                      ${confirmed} / ${item.quantity}
+                    </strong>
+                  </p>
+                </div>
+              `;
+          })
+          .join('')}
 
             <form id="item-form">
               <label for="product-id">
@@ -339,7 +354,7 @@ async function renderPackingOrder(app, orderId) {
             </form>
           </section>
 
-          <section class="card">
+          <section class="card packing-package-card">
             <h2>Package Confirmation</h2>
 
             <p class="muted">
@@ -356,8 +371,6 @@ async function renderPackingOrder(app, orderId) {
               Box
             </label>
 
-            <br /><br />
-
             <label>
               <input
                 type="radio"
@@ -368,16 +381,13 @@ async function renderPackingOrder(app, orderId) {
               Bag
             </label>
 
-            <br /><br />
-
             <button
               id="stage-button"
               class="button primary"
-              ${
-                isComplete() && packageType
-                  ? ''
-                  : 'disabled'
-              }
+              ${isComplete() && packageType
+          ? ''
+          : 'disabled'
+        }
             >
               Mark Ready and Stage Order
             </button>
@@ -386,6 +396,15 @@ async function renderPackingOrder(app, orderId) {
       `;
 
       bindPackingEvents();
+
+      if (focusProductInput) {
+        const productInput = app.querySelector('#product-id');
+
+        if (productInput) {
+          productInput.focus();
+          productInput.select();
+        }
+      }
     }
 
     function bindPackingEvents() {
@@ -405,9 +424,7 @@ async function renderPackingOrder(app, orderId) {
 
         if (!item) {
           renderPackingPage(
-            'That Product ID is not part of this order.',
-            true
-          );
+            'That Product ID is not part of this order.', true, true);
           return;
         }
 
@@ -416,9 +433,7 @@ async function renderPackingOrder(app, orderId) {
           item.quantity
         ) {
           renderPackingPage(
-            'This item is already fully confirmed.',
-            true
-          );
+            'This item is already fully confirmed.', true, true);
           return;
         }
 
@@ -428,9 +443,9 @@ async function renderPackingOrder(app, orderId) {
           }
 
           confirmedQuantities[item.product_id] += 1;
-          renderPackingPage('Item confirmed.');
+          renderPackingPage('Item confirmed.', false, true);
         } catch (error) {
-          renderPackingPage(error.message, true);
+          renderPackingPage(error.message, true, true);
         }
       });
 
