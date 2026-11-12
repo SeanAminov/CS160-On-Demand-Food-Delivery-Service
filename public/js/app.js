@@ -53,9 +53,14 @@ async function showPage() {
   const rawPath = window.location.hash.slice(1) || '/';
   const path = rawPath.split('?')[0]; // ignore query string
   const page = pages[path] || home;
-  const app = document.getElementById('app');
   document.title = page.title + ' | OFS';
   loginUpdate();
+
+  // Each visit gets its own box inside #app. A page that's still loading when you
+  // leave it finishes into its old box, which isn't on the screen anymore, so it
+  // can't write over the page you went to.
+  const view = document.createElement('div');
+  document.getElementById('app').replaceChildren(view);
 
   // This keeps people off pages that aren't theirs. The server still checks the data itself.
   const roles = allowedRoles(path);
@@ -66,12 +71,12 @@ async function showPage() {
       return;
     }
     if (!roles.includes(user.role)) {
-      app.innerHTML = '<h1>Not Allowed</h1><p class="muted">Your account does not have access to this page.</p>';
+      view.innerHTML = '<h1>Not Allowed</h1><p class="muted">Your account does not have access to this page.</p>';
       return;
     }
   }
 
-  page.show(app);
+  page.show(view);
 }
 let loggedIn = false;
 async function loginUpdate(){
