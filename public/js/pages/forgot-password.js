@@ -14,8 +14,8 @@ export default {
         <div class="input-field"><input type="password" name="confirmPassword" id="confirmPassword" placeholder="Confirm New Password" required><i class='bx bxs-lock-alt' ></i></div>
         <button class="button primary" type="submit">Reset Password</button>
         <div class="redirects">
-        <a class = "button" href="#/login">Login</a>
-        <a class = "button" href="#/register">Register Now</a>
+        <label for="login"> Finished resetting password?</label>
+        <a class = "button" id="login" href="#/login">Login</a>
         </div>
         <p id="error" style="color: red;"> </p>
         <p id="success" style="color: blue;"> </p>

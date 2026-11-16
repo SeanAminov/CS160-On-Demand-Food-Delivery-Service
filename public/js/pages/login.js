@@ -39,6 +39,7 @@ export default {
         });
         const data = await response.json();
         if (response.ok){
+          // Checks your role and redirects you after login
           switch (data.role){
             case "customer":
               window.location.hash = "#/catalog";

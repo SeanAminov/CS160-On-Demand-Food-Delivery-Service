@@ -151,8 +151,6 @@ export function setupFilters(app, products){
         setOpen(!sidebar.classList.contains('open'));
     });
 
-    // These two listen on the whole page, so opening the Shop again would add
-    // another copy each time. Remove the old ones before adding new ones.
     if (pageListeners) pageListeners.abort();
     pageListeners = new AbortController();
 
