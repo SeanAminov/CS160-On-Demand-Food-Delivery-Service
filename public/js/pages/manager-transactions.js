@@ -1,6 +1,8 @@
 import { money, escapeHtml } from '../cart-api.js';
 import { managerNavigation } from '../manager-nav.js';
 
+// True when the server has no Stripe keys, so payments are practice ones
+let practiceMode = false;
 let allTransactions = [];
 let searchTerm = '';
 
@@ -106,7 +108,7 @@ function renderTransactionResults(app) {
                     ${
                       transaction.in_stripe
                         ? ''
-                        : '<span class="muted transaction-note">Not found in Stripe</span>'
+                        : `<span class="muted transaction-note">${practiceMode ? 'Practice payment' : 'Not found in Stripe'}</span>`
                     }
                   </td>
                 </tr>
@@ -175,8 +177,12 @@ export default {
       }
 
       allTransactions = data.transactions;
+      practiceMode = Boolean(data.practice_mode);
 
-      if (!data.stripe_connected) {
+      if (practiceMode) {
+        app.querySelector('#transaction-message').textContent =
+          'This server has no Stripe keys, so these are practice payments saved in our database.';
+      } else if (!data.stripe_connected) {
         app.querySelector('#transaction-message').textContent =
           'Could not reach Stripe, so this list shows what we saved in our database.';
       }

@@ -51,7 +51,8 @@ const ALLOWED_TRANSITIONS = {
 // The checkout page needs the publishable key to show Stripe's card box.
 // It's fine for the browser to see this one. The secret key never leaves the server.
 router.get('/stripe-key', (req, res) => {
-  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null });
+  // practice is true when this server has no Stripe keys, so checkout uses practice payments
+  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null, practice: !stripe });
 });
 
 // POST /checkout (Role: Customer)
@@ -60,7 +61,8 @@ router.get('/stripe-key', (req, res) => {
 router.post('/checkout', loginVerification, async (req, res) => {
   const userId = req.session.user.user_id;
   // delivery_address has the address boxes from the page: street, unit, city, state, and zip
-  const { delivery_address, payment_method_id, expected_total } = req.body || {};
+  // Without Stripe keys there's no card, and practice_result says whether the practice payment goes through
+  const { delivery_address, payment_method_id, practice_result, expected_total } = req.body || {};
 
   // Validate the address and the Downtown San Jose service area
   const location = await checkAddress(delivery_address);
@@ -68,11 +70,11 @@ router.post('/checkout', loginVerification, async (req, res) => {
     return res.status(location.status).json({ error: location.error });
   }
 
-  if (typeof payment_method_id !== 'string' || !payment_method_id.startsWith('pm_')) {
+  if (stripe && (typeof payment_method_id !== 'string' || !payment_method_id.startsWith('pm_'))) {
     return res.status(400).json({ error: 'Please enter your card details.' });
   }
-  if (!stripe) {
-    return res.status(500).json({ error: 'Payments are not set up on this server yet. Add the Stripe keys to .env.' });
+  if (!stripe && practice_result !== 'approved' && practice_result !== 'declined') {
+    return res.status(400).json({ error: 'Please pick how the practice payment should go.' });
   }
 
   // Retrieve user's cart
@@ -150,25 +152,43 @@ router.post('/checkout', loginVerification, async (req, res) => {
     }
 
     // Charge the card through Stripe. The amount comes from our database, not the browser.
-    try {
-      payment = await stripe.paymentIntents.create({
-        amount: Math.round(totalPrice * 100),
-        currency: 'usd',
-        payment_method: payment_method_id,
-        confirm: true,
-        // Card payments only, so nobody gets sent to another website to pay
-        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
-        description: `OFS order for user #${userId}`
-      });
-    } catch (err) {
-      await conn.rollback();
-      if (err.type !== 'StripeCardError') {
-        console.error('Stripe error:', err.message);
-        return res.status(502).json({ error: 'The payment could not go through. Please try again.' });
+    // Without Stripe keys, a practice payment stands in, and nothing real is charged.
+    let declinedMessage = null;
+    let failedTxId = null;
+    if (!stripe) {
+      const practiceId = 'practice_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      if (practice_result === 'declined') {
+        declinedMessage = 'Your card was declined.';
+        failedTxId = practiceId;
+      } else {
+        payment = { id: practiceId, status: 'succeeded' };
       }
+    } else {
+      try {
+        payment = await stripe.paymentIntents.create({
+          amount: Math.round(totalPrice * 100),
+          currency: 'usd',
+          payment_method: payment_method_id,
+          confirm: true,
+          // Card payments only, so nobody gets sent to another website to pay
+          automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+          description: `OFS order for user #${userId}`
+        });
+      } catch (err) {
+        if (err.type !== 'StripeCardError') {
+          await conn.rollback();
+          console.error('Stripe error:', err.message);
+          return res.status(502).json({ error: 'The payment could not go through. Please try again.' });
+        }
+        declinedMessage = err.message;
+        failedTxId = err.payment_intent ? err.payment_intent.id : 'declined_' + Date.now().toString(36);
+      }
+    }
+
+    if (declinedMessage) {
+      await conn.rollback();
       // Save the order as Declined with its items, so managers can see who tried and
       // what was in the cart. Nothing was charged, so stock and the cart stay the same.
-      const failedTxId = err.payment_intent ? err.payment_intent.id : 'declined_' + Date.now().toString(36);
       await conn.beginTransaction();
       const [declinedRes] = await conn.query(`
         INSERT INTO Orders (
@@ -194,7 +214,7 @@ router.post('/checkout', loginVerification, async (req, res) => {
         orderId: declinedOrderId, link: '#/checkout'
       });
       await conn.commit();
-      return res.status(402).json({ error: `${err.message} Your cart is unchanged.`, order_id: declinedOrderId });
+      return res.status(402).json({ error: `${declinedMessage} Your cart is unchanged.`, order_id: declinedOrderId });
     }
 
     // Some test cards ask for an extra check with the bank, which we don't support yet.
@@ -279,8 +299,9 @@ router.post('/checkout', loginVerification, async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    // If the card was charged but the order couldn't be saved, give the money back
-    if (payment) {
+    // If the card was charged but the order couldn't be saved, give the money back.
+    // A practice payment never charged anything, so there's nothing to send back.
+    if (payment && stripe) {
       try {
         await stripe.refunds.create({ payment_intent: payment.id });
       } catch (refundErr) {
