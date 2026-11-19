@@ -34,6 +34,8 @@ const pages = {
   '/account': account,
   '/employee-packing': employeePacking,
   '/employee-shipping': employeeShipping,
+  // Employees get the stock tools from the Products and Inventory page, without product editing
+  '/employee-inventory': managerInventory,
   '/manager-inventory': managerInventory,
   '/manager-orders': managerOrders,
   '/forgot-password': forgotPassword,

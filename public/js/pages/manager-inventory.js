@@ -1,6 +1,11 @@
 import { escapeHtml } from '../cart-api.js';
 import { managerNavigation } from '../manager-nav.js';
+import { employeeNavigation } from '../employee-nav.js';
+import { getUser } from '../user.js';
 
+// Only managers can add, edit, and remove products. Employees use this page to
+// check stock and add or remove items as they come in.
+let canEditProducts = true;
 let inventoryItems = [];
 let pendingChanges = {};
 let showLowStockOnly = false;
@@ -243,14 +248,18 @@ function renderInventory(app) {
 
   app.innerHTML = `
     <section class="hero">
-      <h1>Products and Inventory</h1>
+      <h1>${canEditProducts ? 'Products and Inventory' : 'Inventory'}</h1>
 
       <p class="muted">
-        Change product details and adjust stock.
+        ${canEditProducts
+          ? 'Change product details and adjust stock.'
+          : 'Check stock and add or remove items as they come in.'}
       </p>
     </section>
 
-    ${managerNavigation('#/manager-inventory')}
+    ${canEditProducts
+      ? managerNavigation('#/manager-inventory')
+      : employeeNavigation('#/employee-inventory')}
 
     <div class="inventory-workspace">
       <section class="card inventory-table-card">
@@ -259,7 +268,9 @@ function renderInventory(app) {
             <h2>Products</h2>
 
             <p class="muted">
-              Add a product, or click Edit to change a product's price, name, weight, and more.
+              ${canEditProducts
+                ? "Add a product, or click Edit to change a product's price, name, weight, and more."
+                : 'Use + and - or type an amount, then press Confirm Updates.'}
             </p>
           </div>
 
@@ -320,16 +331,18 @@ function renderInventory(app) {
     }
   </button>
 
-  <button
-    id="add-product-button"
-    class="button primary"
-    type="button"
-  >
-    ${editingProductId === 'new'
-      ? 'Close New Product'
-      : 'Add Product'
-    }
-  </button>
+  ${canEditProducts ? `
+    <button
+      id="add-product-button"
+      class="button primary"
+      type="button"
+    >
+      ${editingProductId === 'new'
+        ? 'Close New Product'
+        : 'Add Product'
+      }
+    </button>
+  ` : ''}
 </div>
         </div>
 
@@ -432,6 +445,7 @@ function renderInventory(app) {
                             +
                           </button>
 
+                          ${canEditProducts ? `
                           <button
                             class="button small product-edit-button"
                             data-product-id="${item.product_id}"
@@ -447,6 +461,7 @@ function renderInventory(app) {
                           >
                             Remove
                           </button>
+                          ` : ''}
                         </div>
                       </td>
                     </tr>
@@ -692,7 +707,7 @@ function bindInventoryEvents(app) {
 
   app
     .querySelector('#add-product-button')
-    .addEventListener('click', () => {
+    ?.addEventListener('click', () => {
       if (editingProductId === 'new') {
         closeProductEditor();
       } else {
@@ -893,7 +908,7 @@ async function saveInventoryChanges(app) {
     await Promise.all(
       changes.map(async ([productId, change]) => {
         const response = await fetch(
-          `/manager/inventory/${productId}`,
+          `/inventory/${productId}`,
           {
             method: 'PATCH',
             headers: {
@@ -964,9 +979,16 @@ export default {
     productSearch = '';
     categoryFilter = '';
 
+    const user = await getUser();
+    canEditProducts = Boolean(user && user.role === 'manager');
+    const heading = canEditProducts ? 'Products and Inventory' : 'Inventory';
+    if (!canEditProducts) {
+      document.title = 'Inventory | OFS';
+    }
+
     app.innerHTML = `
       <section class="hero">
-        <h1>Products and Inventory</h1>
+        <h1>${heading}</h1>
 
         <p class="muted">
           Loading products...
@@ -975,7 +997,7 @@ export default {
     `;
 
     try {
-      const response = await fetch('/manager/inventory');
+      const response = await fetch('/inventory');
 
       if (!response.ok) {
         throw new Error('Could not load inventory.');
@@ -987,14 +1009,14 @@ export default {
     } catch (error) {
       app.innerHTML = `
         <section class="hero">
-          <h1>Products and Inventory</h1>
+          <h1>${heading}</h1>
 
           <p class="message">
             ${error.message}
           </p>
 
-          <a class="button primary" href="#/manager">
-            Return to Manager Dashboard
+          <a class="button primary" href="${canEditProducts ? '#/manager' : '#/employee'}">
+            ${canEditProducts ? 'Return to Manager Dashboard' : 'Return to Dashboard'}
           </a>
         </section>
       `;

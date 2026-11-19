@@ -179,7 +179,7 @@ export default {
         deliveriesResponse,
       ] = await Promise.all([
         fetch('/orders'),
-        fetch('/manager/inventory'),
+        fetch('/inventory'),
         fetch('/deliveries'),
       ]);
 
