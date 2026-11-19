@@ -3,6 +3,7 @@ const pool = require('../db');
 const { loginVerification, roleVerification } = require('../auth');
 const { checkAddress } = require('../address');
 const { notifyUser, notifyRoles, statusMessage } = require('../notify');
+const { cancelOrder } = require('../cancel-order');
 const Stripe = require('stripe');
 const router = express.Router();
 
@@ -15,24 +16,6 @@ const MAX_CART_WEIGHT = 200;
 // Stripe test mode. The secret key stays on the server in .env. If someone hasn't
 // added it yet, the site still runs and checkout says what's missing.
 const stripe = process.env.STRIPE_SECRET_KEY ? Stripe(process.env.STRIPE_SECRET_KEY) : null;
-
-// Gives the money for an order back through Stripe and returns the refund ID.
-// Orders from before Stripe was hooked up have made up payment IDs, so there's
-// nothing to send back to Stripe for those.
-async function refundOrder(conn, orderId) {
-  const [payments] = await conn.query(
-    "SELECT stripe_transaction_id FROM Transactions WHERE order_id = ? AND payment_status = 'succeeded'",
-    [orderId]
-  );
-  if (payments.length > 0 && payments[0].stripe_transaction_id.startsWith('pi_')) {
-    if (!stripe) {
-      throw new Error('Stripe keys are missing from .env, so the refund could not be sent.');
-    }
-    const refund = await stripe.refunds.create({ payment_intent: payments[0].stripe_transaction_id });
-    return refund.id;
-  }
-  return 're_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-}
 
 // Allowed state transitions per Section 5 of Part 2 specification
 const ALLOWED_TRANSITIONS = {
@@ -423,37 +406,17 @@ router.put('/orders/:id/status', loginVerification, roleVerification('employee',
     });
   }
 
-  // Handle cancellation transition: restore inventory & record refund
+  // Cancelling puts the items back in stock and refunds the order
   if (targetStatus === 'Cancelled') {
-    const conn = await pool.getConnection();
     try {
-      await conn.beginTransaction();
-
-      const [items] = await conn.query('SELECT product_id, quantity FROM OrderItems WHERE order_id = ?', [orderId]);
-      for (const item of items) {
-        await conn.query('UPDATE Inventory SET quantity = quantity + ? WHERE product_id = ?', [
-          item.quantity, item.product_id
-        ]);
+      // The order has to still be in the status we just checked
+      if (!(await cancelOrder(orderId, [currentStatus]))) {
+        return res.status(409).json({ error: 'This order just changed. Reload the page and try again.' });
       }
-
-      await conn.query('UPDATE Orders SET status = ? WHERE order_id = ?', ['Cancelled', orderId]);
-
-      const refundTxId = await refundOrder(conn, orderId);
-      await conn.query(`
-        INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
-        VALUES (?, ?, ?, 'refunded')
-      `, [orderId, refundTxId, orderRows[0].total_price]);
-
-      await notifyUser(conn, orderRows[0].user_id, statusMessage(orderId, 'Cancelled'), { orderId, link: '#/orders' });
-
-      await conn.commit();
       return res.json({ message: 'Order cancelled, inventory restored, and refund recorded.', order_id: orderId, status: 'Cancelled' });
     } catch (err) {
-      await conn.rollback();
       console.error('Cancel order error:', err);
       return res.status(500).json({ error: 'Could not cancel order.' });
-    } finally {
-      conn.release();
     }
   }
 
@@ -483,35 +446,15 @@ router.post('/orders/:id/cancel', loginVerification, roleVerification('manager')
     return res.status(400).json({ error: `Cannot cancel order in "${currentStatus}" status.` });
   }
 
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
-
-    const [items] = await conn.query('SELECT product_id, quantity FROM OrderItems WHERE order_id = ?', [orderId]);
-    for (const item of items) {
-      await conn.query('UPDATE Inventory SET quantity = quantity + ? WHERE product_id = ?', [
-        item.quantity, item.product_id
-      ]);
+    // The order has to still be in the status we just checked
+    if (!(await cancelOrder(orderId, [currentStatus]))) {
+      return res.status(409).json({ error: 'This order just changed. Reload the page and try again.' });
     }
-
-    await conn.query('UPDATE Orders SET status = ? WHERE order_id = ?', ['Cancelled', orderId]);
-
-    const refundTxId = await refundOrder(conn, orderId);
-    await conn.query(`
-      INSERT INTO Transactions (order_id, stripe_transaction_id, amount, payment_status)
-      VALUES (?, ?, ?, 'refunded')
-    `, [orderId, refundTxId, orderRows[0].total_price]);
-
-    await notifyUser(conn, orderRows[0].user_id, statusMessage(orderId, 'Cancelled'), { orderId, link: '#/orders' });
-
-    await conn.commit();
     res.json({ message: 'Order successfully cancelled and inventory restored.', order_id: orderId, status: 'Cancelled' });
   } catch (err) {
-    await conn.rollback();
     console.error('Cancel order error:', err);
     res.status(500).json({ error: 'Could not cancel order.' });
-  } finally {
-    conn.release();
   }
 });
 
