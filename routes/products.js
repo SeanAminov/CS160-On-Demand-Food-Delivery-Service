@@ -19,6 +19,13 @@ function isBlank(value) {
   return value === null || value === undefined || String(value).trim() === '';
 }
 
+// True for amounts like 5, 4.5, and 4.99, but not 4.999. Prices and weights are
+// saved with 2 decimal places, so anything more exact is an error instead of being
+// rounded without anyone knowing.
+function hasTwoDecimalsAtMost(value) {
+  return /^\d*(\.\d{1,2})?$/.test(String(value).trim());
+}
+
 // Checks the product form. If something is wrong, this gives back the error to send.
 // If it's fine, it gives back the cleaned up values.
 function checkProduct(body) {
@@ -46,8 +53,14 @@ function checkProduct(body) {
   if (isBlank(body.price) || !Number.isFinite(price) || price < MIN_PRICE || price > MAX_PRICE) {
     return { error: `Price must be between $${MIN_PRICE.toFixed(2)} and $${MAX_PRICE}.` };
   }
+  if (!hasTwoDecimalsAtMost(body.price)) {
+    return { error: 'Price can have at most 2 decimal places, like 4.99.' };
+  }
   if (isBlank(body.weight) || !Number.isFinite(weight) || weight < 0.01 || weight > MAX_WEIGHT) {
     return { error: `Weight must be between 0.01 and ${MAX_WEIGHT} lbs.` };
+  }
+  if (!hasTwoDecimalsAtMost(body.weight)) {
+    return { error: 'Weight can have at most 2 decimal places, like 1.25.' };
   }
   if (isBlank(body.reorder_level) || !Number.isInteger(reorderLevel) || reorderLevel < 0 || reorderLevel > MAX_REORDER_LEVEL) {
     return { error: 'Reorder level must be a whole number of 0 or more.' };
