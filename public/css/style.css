@@ -2617,3 +2617,38 @@ a.notification-item:hover {
   background: white;
   font-size: 15px;
 }
+
+/* Red, since deleting an account can't be undone */
+.button.account-delete-button {
+  border-color: #a12a2a;
+  color: #a12a2a;
+}
+
+/* Whether an account can still log in, on the Accounts page */
+.account-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.account-status.active {
+  background: #e6f1e8;
+  color: #2f6f3e;
+}
+
+.account-status.inactive {
+  background: #fee2e2;
+  color: #a12a2a;
+}
+
+.account-row-inactive td {
+  color: #777777;
+}
+
+/* The Accounts table has fewer columns than the order table, so it fits on smaller screens */
+.order-management-table.account-table {
+  min-width: 760px;
+}

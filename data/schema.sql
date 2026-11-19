@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS Users (
     role ENUM('customer', 'employee', 'manager') NOT NULL DEFAULT 'customer',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     stripe_customer_id VARCHAR(255) UNIQUE NULL,
-    address VARCHAR(255) NULL
+    address VARCHAR(255) NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 -- Add the saved address column when upgrading an existing database,
@@ -30,10 +31,29 @@ PREPARE add_address_column_statement FROM @add_address_column_sql;
 EXECUTE add_address_column_statement;
 DEALLOCATE PREPARE add_address_column_statement;
 
+-- Add the active column when upgrading an existing database. Deleting an account
+-- turns it off instead of removing it, so its past orders and payments stay in the records.
+SET @active_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'Users'
+      AND COLUMN_NAME = 'active'
+);
+SET @add_active_column_sql = IF(
+    @active_column_exists = 0,
+    'ALTER TABLE Users ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE',
+    'SELECT 1'
+);
+PREPARE add_active_column_statement FROM @add_active_column_sql;
+EXECUTE add_active_column_statement;
+DEALLOCATE PREPARE add_active_column_statement;
+
 -- Test accounts, so everyone (and the TA) gets the same ones when the server starts.
 -- They all use the password 12345678, which is only for testing on your own computer.
--- An account that already exists is left alone, except employee1 and manager1 always
--- get their roles, in case someone registered them before this was here.
+-- An account that already exists keeps its password. employee1 and manager1 always get
+-- their roles, in case someone registered them before this was here, and all four are
+-- turned back on in case one was deleted while testing.
 SET @test_password = '$2b$10$4THOR/N34/6OdefmCVxR7e1BCVwh.RP52VdLBoHsKUEoyKjOWmoD.';
 INSERT INTO Users (name, email, password_hash, role)
 SELECT 'Customer One', 'customer1@gmail.com', @test_password, 'customer'
@@ -49,6 +69,8 @@ SELECT 'Manager One', 'manager1@gmail.com', @test_password, 'manager'
 WHERE NOT EXISTS (SELECT 1 FROM Users WHERE email = 'manager1@gmail.com');
 UPDATE Users SET role = 'employee' WHERE email = 'employee1@gmail.com';
 UPDATE Users SET role = 'manager' WHERE email = 'manager1@gmail.com';
+UPDATE Users SET active = TRUE
+WHERE email IN ('customer1@gmail.com', 'customer2@gmail.com', 'employee1@gmail.com', 'manager1@gmail.com');
 
 CREATE TABLE IF NOT EXISTS Products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,

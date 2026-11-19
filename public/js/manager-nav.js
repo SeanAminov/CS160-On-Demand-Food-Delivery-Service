@@ -4,6 +4,7 @@ const MANAGER_PAGES = [
   ['#/manager-inventory', 'Products and Inventory'],
   ['#/manager-orders', 'Order Management'],
   ['#/manager-transactions', 'Transaction History'],
+  ['#/manager-accounts', 'Accounts'],
 ];
 
 export function managerNavigation(currentPage) {

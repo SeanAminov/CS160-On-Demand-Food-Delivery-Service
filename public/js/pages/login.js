@@ -9,6 +9,7 @@ export default {
     app.innerHTML = `
       <div class="account-wrapper">
       <h1>Log In</h1>
+      ${window.location.hash.includes('deleted') ? '<p class="message success">Your account was deleted.</p>' : ''}
       <form id="login-form">
       <div class="input-field"><input type="email" name="email" id="email" placeholder="Email" required><i class='bx bxs-envelope' ></i></div>
       <div class="input-field"><input type="password" name="password" id="password" placeholder="Password" required><i class='bx bxs-lock-alt' ></i></div>

@@ -39,6 +39,16 @@ export default {
         </form>
         <p class="message" id="address-message"></p>
       </div>
+
+      <div class="card" style="max-width: 560px; margin-top: 20px;">
+        <h2 style="margin-top: 0;">Delete Account</h2>
+        <p class="muted">
+          You won't be able to log in anymore, and orders that haven't shipped yet are
+          cancelled and refunded. Your past orders stay in our records.
+        </p>
+        <button class="button account-delete-button" id="delete-account" type="button">Delete My Account</button>
+        <p class="message" id="delete-message"></p>
+      </div>
     `;
 
     // textContent shows the name as plain text, even if it has symbols in it
@@ -58,6 +68,23 @@ export default {
       } catch (err) {
         message.textContent = err.message;
         message.className = 'message';
+      }
+    });
+
+    app.querySelector('#delete-account').addEventListener('click', async () => {
+      const confirmed = window.confirm(
+        "Are you sure you want to delete your account? You won't be able to log in again, and orders that haven't shipped will be cancelled and refunded."
+      );
+      if (!confirmed) return;
+
+      const deleteMessage = app.querySelector('#delete-message');
+      try {
+        await cartRequest('DELETE', '/profile');
+        // The login page says the account was deleted, and the header shows it's logged out
+        window.location.hash = '#/login?deleted';
+      } catch (err) {
+        deleteMessage.textContent = err.message;
+        deleteMessage.className = 'message';
       }
     });
   },

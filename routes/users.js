@@ -38,10 +38,14 @@ router.post('/register', async (req, res) => {
     }
     try {
         const [exists] = await pool.query(
-            'SELECT user_id FROM Users WHERE email = ?', [normalizedEmail]
+            'SELECT user_id, active FROM Users WHERE email = ?', [normalizedEmail]
         );
+        // A deleted account keeps its email, so its old orders still point to it
+        if (exists.length > 0 && !exists[0].active){
+            return res.status(409).json({error: 'This email belongs to an account that is not active anymore.'})
+        }
         if (exists.length > 0){
-            return res.status(409).json({error: 'Email already in use.'})        
+            return res.status(409).json({error: 'Email already in use.'})
         }
         const hashedPassword = await hashPassword(password);
         await pool.query(
@@ -67,12 +71,16 @@ router.post('/login', async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
     try{
         const [userRow] = await pool.query(
-            'SELECT user_id, name, password_hash, role FROM Users WHERE email = ?', [normalizedEmail]
+            'SELECT user_id, name, password_hash, role, active FROM Users WHERE email = ?', [normalizedEmail]
         );
         if ((userRow.length === 0) || !(await verifyPassword(password, userRow[0].password_hash))){
             return res.status(401).json({error: 'Incorrect email or password'});
         }
         const user = userRow[0];
+        // Deleted accounts stay in the database for their old orders, but they can't log in
+        if (!user.active){
+            return res.status(403).json({error: 'This account is not active anymore.'});
+        }
         req.session.regenerate((err) => {
             if (err){
                 return res.status(500).json({error: 'Login Failed'});
@@ -113,9 +121,12 @@ router.post('/forgot-password/code', async(req, res) => {
         return res.status(400).json({error: 'Enter an email.'});
     }
     try{
-        const [users] = await pool.query('SELECT user_id FROM Users WHERE email = ?', [email]);
+        const [users] = await pool.query('SELECT user_id, active FROM Users WHERE email = ?', [email]);
         if (users.length === 0){
             return res.status(404).json({error: 'Email not linked to an account.'});
+        }
+        if (!users[0].active){
+            return res.status(403).json({error: 'This account is not active anymore.'});
         }
         const code = String(Math.floor(100000 + Math.random() * 900000));
         resetCodes.set(email,code);
@@ -145,8 +156,12 @@ router.post('/forgot-password/reset', async (req, res) =>{
         return res.status(400).json({error: 'Incorrect Code'});
     }
     try{
-        await pool.query('UPDATE Users SET password_hash = ? WHERE email = ?', [await hashPassword(password), email]);
+        // Only an active account can get a new password, in case it was deleted after the code was sent
+        const [result] = await pool.query('UPDATE Users SET password_hash = ? WHERE email = ? AND active = TRUE', [await hashPassword(password), email]);
         resetCodes.delete(email);
+        if (result.affectedRows === 0){
+            return res.status(403).json({error: 'This account is not active anymore.'});
+        }
         res.json({message: 'Password reset.'});
     }
     catch(error){
