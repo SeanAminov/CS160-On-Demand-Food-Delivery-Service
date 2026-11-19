@@ -114,7 +114,7 @@ The server makes these accounts when it starts, if they aren't there yet. They a
 * `employee1@gmail.com` employee
 * `manager1@gmail.com` manager
 
-These are only for testing on your own computer. An account that already exists keeps its password, and employee1 and manager1 always get their roles back when the server starts.
+These are only for testing on your own computer. An account that already exists keeps its password. When the server starts, employee1 and manager1 always get their roles back, and all four are turned back on in case one was deleted while testing.
 
 ## Testing payments
 
@@ -134,8 +134,9 @@ When a card is declined, the order is still saved with the status Declined, alon
     db.js              the MySQL connection, and the setup that runs schema.sql when the server starts
     auth.js            password hashing and the login and role checks
     address.js         checks delivery addresses for checkout and My Account
-    routes/            the API routes (users, cart, orders, deliveries, employee, manager, products, transactions, notifications)
+    routes/            the API routes (users, accounts, cart, orders, deliveries, employee, inventory, products, transactions, notifications)
     notify.js          saves notifications for customers, employees, and managers
+    cancel-order.js    cancels and refunds an order, for managers cancelling one and for deleted accounts
     data/schema.sql    creates the database, tables, and sample products
     public/index.html  the header, nav, and footer that every page shares
     public/css/        styles
@@ -155,15 +156,16 @@ Each page is its own file in `public/js/pages`. The part of the URL after the # 
 * `#/cart` cart.js
 * `#/checkout` checkout.js
 * `#/orders` orders.js, where customers track their deliveries and press Got My Order once their groceries arrive
-* `#/account` account.js, where customers save their delivery address
+* `#/account` account.js, where customers save their delivery address and can delete their account
 * `#/employee` employee.js
 * `#/employee-packing` employee-packing.js
 * `#/employee-shipping` employee-shipping.js, where employees pick a robot and send out a trip
 * `#/manager` manager.js
 * `#/employee-inventory` the same page for employees, who can check stock and change it but can't edit, add, or remove products
-* `#/manager-inventory` manager-inventory.js, where managers add, edit, and remove products, change stock, and see what's running low (at or below its reorder level)
+* `#/manager-inventory` manager-inventory.js, where managers add, edit, and remove products, change stock, and see what's running low (at or below its reorder level). Prices and weights can have at most 2 decimal places
 * `#/manager-orders` manager-orders.js, where clicking an order shows the products in it
 * `#/manager-transactions` manager-transactions.js, the payments and refunds from Stripe matched to our orders
+* `#/manager-accounts` manager-accounts.js, where managers see every account and delete customer and employee accounts
 * `#/notifications` notifications.js, the logged in user's notifications
 
 All of these work. Only managers can cancel orders, so employees don't see the Cancel buttons.
@@ -171,6 +173,8 @@ All of these work. Only managers can cancel orders, so employees don't see the C
 Every trip's route map (on the Employee Dashboard, on Waiting to Ship after a robot goes out, and on My Orders) has a Trip Simulation under it. Dragging its timeline moves the robot along the planned route, and it reaches each stop at its ETA. A trip that's out right now starts where the robot would be at this moment and keeps moving in real time. The simulation only moves the robot on the page and never changes an order. The code is in `public/js/robot-simulation.js`.
 
 Notifications show up under Notifications in the header, with the number of unread ones next to it, and opening the page marks them read. Customers get one whenever their order changes (placed, being packed, packed, out for delivery, delivered, failed, or cancelled) and when their card is declined. Employees get one for each new order to pack and when a customer presses Got My Order. Managers get one when a product drops to its low stock level or runs out, and when a delivery fails. Each one links to the page that needs attention. The code that saves them is in `notify.js`.
+
+Anyone can delete their own account from My Account, and managers can delete customer and employee accounts from Accounts. Deleting an account turns it off instead of erasing it, so its past orders and payments stay in the records. Orders that haven't shipped are cancelled and refunded, and an order that's out for delivery has to arrive first. Logging in with a deleted account says it's not active anymore. A manager can't delete their own account if they're the only manager.
 
 Pages starting with `#/employee` are only for employees and managers, and `#/manager` is only for managers. `app.js` checks this before showing the page. The server also checks the role before sending any employee data, and that's the check that actually protects it.
 
@@ -185,6 +189,9 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 * `POST /register`, `POST /login`, `POST /logout` accounts
 * `GET /profile` who is logged in
 * `GET /profile/address`, `PUT /profile/address` the logged in user's saved delivery address
+* `DELETE /profile` delete the logged in user's own account
+* `GET /users` every account, with how many of its orders haven't shipped (managers only)
+* `DELETE /users/:id` delete a customer or employee account (managers only)
 * `GET /cart` the logged in user's cart, with the subtotal, total weight, delivery fee, and tax
 * `POST /cart/items`, `PUT /cart/items/:id`, `DELETE /cart/items/:id` add, change, and remove cart items. A cart can't go over 200 lb, since that's all one robot can carry
 * `GET /stripe-key` the publishable key the checkout page needs for Stripe's card box

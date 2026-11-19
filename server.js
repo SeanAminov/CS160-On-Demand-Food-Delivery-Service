@@ -10,6 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const userRoutes = require('./routes/users');
+const accountRoutes = require('./routes/accounts');
 const cartRoutes = require('./routes/cart');
 const employeeRoutes = require('./routes/employee');
 const orderRoutes = require('./routes/orders');
@@ -63,6 +64,8 @@ app.get('/products', async (req, res) => {
 });
 
 app.use('/', userRoutes);
+// Deleting accounts, for anyone deleting their own and managers deleting others
+app.use('/', accountRoutes);
 app.use('/', cartRoutes);
 app.use('/', orderRoutes);
 app.use('/', deliveryRoutes);

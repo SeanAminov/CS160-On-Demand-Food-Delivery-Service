@@ -517,6 +517,9 @@ function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = nul
     robotMarker.setPosition(point);
   }
 
+  // Fit the whole route on the map, not just the hub and stops. A driving route can go
+  // around the block, and the robot would drive off the edge of the map otherwise.
+  pathPoints.forEach((point) => bounds.extend(point));
   map.fitBounds(bounds);
   return { pathPoints, placeRobot };
 }
@@ -622,6 +625,7 @@ function renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId = null, 
     robotMarker.setLatLng([point.lat, point.lng]);
   }
 
-  map.fitBounds(polyline.getBounds().pad(0.15));
+  // Fit the whole route and every marker on the map, so the hub and stops show too
+  map.fitBounds(polyline.getBounds().extend(window.L.latLngBounds(latLngs)).pad(0.15));
   return { pathPoints: polylineCoords.map(([lat, lng]) => ({ lat, lng })), placeRobot };
 }

@@ -24,6 +24,23 @@ function isLowStock(item) {
   return item.quantity <= item.reorder_level;
 }
 
+// True for amounts like 5, 4.5, and 4.99, but not 4.999
+function hasTwoDecimalsAtMost(value) {
+  return /^\d*(\.\d{1,2})?$/.test(String(value).trim());
+}
+
+// Prices and weights are saved with 2 decimal places, so a product with more than
+// that can't be saved. This gives back what's wrong, or an empty string if it's fine.
+function decimalsError(draft) {
+  if (!hasTwoDecimalsAtMost(draft.price)) {
+    return 'Price can have at most 2 decimal places, like 4.99.';
+  }
+  if (!hasTwoDecimalsAtMost(draft.weight)) {
+    return 'Weight can have at most 2 decimal places, like 1.25.';
+  }
+  return '';
+}
+
 function openProductEditor(productId) {
   const item = inventoryItems.find(
     (currentItem) => currentItem.product_id === productId
@@ -733,6 +750,20 @@ function bindInventoryEvents(app) {
       editDraft[event.target.name] = event.target.value;
     });
 
+    // After the price or weight is typed in, say right away if it has too many decimal
+    // places. A good amount gets shown with 2 decimal places, so 4.5 turns into 4.50.
+    editForm.querySelectorAll('#edit-price, #edit-weight').forEach((input) => {
+      input.addEventListener('change', () => {
+        const error = decimalsError(editDraft);
+        app.querySelector('#product-edit-error').textContent = error;
+
+        if (hasTwoDecimalsAtMost(input.value) && input.value.trim() !== '') {
+          input.value = Number(input.value).toFixed(2);
+          editDraft[input.name] = input.value;
+        }
+      });
+    });
+
     editForm.addEventListener('submit', (event) => {
       event.preventDefault();
       saveProductChanges(app);
@@ -790,6 +821,13 @@ function bindInventoryEvents(app) {
 async function saveProductChanges(app) {
   const isNew = editingProductId === 'new';
   const saveButton = app.querySelector('#product-edit-save');
+
+  // Too many decimal places means it can't be saved. The server checks this too.
+  const error = decimalsError(editDraft);
+  if (error) {
+    app.querySelector('#product-edit-error').textContent = error;
+    return;
+  }
 
   saveButton.disabled = true;
   saveButton.textContent = 'Saving...';
