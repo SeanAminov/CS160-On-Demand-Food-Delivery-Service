@@ -1,6 +1,7 @@
 import { money } from '../cart-api.js';
 import { getUser } from '../user.js';
 import { renderRouteMap } from '../route-map.js';
+import { employeeNavigation } from '../employee-nav.js';
 
 // Only managers can cancel orders, so employees don't see the Cancel buttons
 let isManager = false;
@@ -41,6 +42,7 @@ async function renderDashboard(app, feedbackMsg = '', isError = false) {
 
   app.innerHTML = `
     <h1>Employee Fulfillment Dashboard</h1>
+    ${employeeNavigation('#/employee')}
     ${feedbackMsg ? `<p class="message" style="color: ${isError ? '#a12a2a' : '#2f6f3e'}; font-weight: bold;">${feedbackMsg}</p>` : ''}
 
     <!-- Quick Stats Bar -->

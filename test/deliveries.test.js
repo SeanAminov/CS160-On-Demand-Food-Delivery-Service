@@ -89,14 +89,19 @@ describe('Deliveries & Robot Pathway Trips API', () => {
     assert.strictEqual(data.error, 'Please pick a robot for this trip.');
   });
 
-  test('POST /deliveries/batches dispatches trip along a walking route and stores overview_polyline', async () => {
+  test('POST /deliveries/batches dispatches trip along a driving route and stores overview_polyline', async () => {
     testSessionUser = { user_id: 1, role: 'employee', name: 'Staff' };
+
+    // Use whichever robot isn't already out, since a busy robot can't take another trip
+    const [busy] = await pool.query("SELECT robot FROM Deliveries WHERE delivery_status = 'Out for Delivery'");
+    const robot = ['Robot 1', 'Robot 2', 'Robot 3'].find((name) => !busy.some((trip) => trip.robot === name));
+    assert.ok(robot, 'All three robots are out on trips, so finish one before running this test');
 
     const res = await fetch(`${baseUrl}/deliveries/batches`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        robot: 'Robot 1',
+        robot,
         orderIds: [testOrderId]
       })
     });
@@ -106,8 +111,8 @@ describe('Deliveries & Robot Pathway Trips API', () => {
     assert.ok(data.delivery_id);
     testDeliveryId = data.delivery_id;
 
-    assert.strictEqual(data.robot, 'Robot 1');
-    assert.strictEqual(data.route.travel_mode, 'WALK');
+    assert.strictEqual(data.robot, robot);
+    assert.strictEqual(data.route.travel_mode, 'DRIVE');
     assert.ok(data.route.overview_polyline, 'Must include non-empty polyline');
     assert.ok(data.route.overview_polyline.length > 10);
 
@@ -126,7 +131,7 @@ describe('Deliveries & Robot Pathway Trips API', () => {
     assert.strictEqual(data.delivery_id, testDeliveryId);
     assert.strictEqual(data.delivery_status, 'Out for Delivery');
     assert.ok(data.route_parsed);
-    assert.strictEqual(data.route_parsed.travel_mode, 'WALK');
+    assert.strictEqual(data.route_parsed.travel_mode, 'DRIVE');
     assert.ok(data.route_parsed.overview_polyline);
     assert.ok(data.orders.some(o => o.order_id === testOrderId));
   });

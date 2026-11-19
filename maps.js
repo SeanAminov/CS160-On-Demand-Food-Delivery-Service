@@ -1,6 +1,6 @@
 // Service for Google Maps API integration:
 // 1. Geocoding delivery addresses into real coordinates
-// 2. Multi-stop route optimization using Google Maps Routes API (WALK mode, since the robots ride on sidewalks)
+// 2. Multi-stop route optimization using Google Maps Routes API (driving, with traffic at the time the robot leaves)
 // 3. Round-trip robot dispatch from the OFS Store Hub
 
 const STORE_HUB = {
@@ -171,9 +171,9 @@ function parseSeconds(durationStr) {
   return parseInt(String(durationStr).replace('s', ''), 10) || 0;
 }
 
-// Modern Google Maps Routes API (computeRoutes) using WALK travel mode
-// Delivery robots ride on sidewalks, so a walking route is the closest match, and
-// walking times are close to how fast the robot goes
+// Modern Google Maps Routes API (computeRoutes) using DRIVE travel mode with traffic.
+// The robot is a self-driving vehicle, so its times use the traffic at the moment it
+// leaves, and Google still picks the best stop order.
 async function fetchFromRoutesApi(orders, departureDate, apiKey) {
   const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 
@@ -193,16 +193,22 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
         latLng: { latitude: Number(o.delivery_lat), longitude: Number(o.delivery_lng) }
       }
     })),
-    travelMode: 'WALK',
+    travelMode: 'DRIVE',
+    routingPreference: 'TRAFFIC_AWARE',
     optimizeWaypointOrder: orders.length > 1
   };
+
+  // Google only takes a departure time that's in the future. Leaving it out means right now.
+  if (departureDate.getTime() - Date.now() > 60000) {
+    requestBody.departureTime = departureDate.toISOString();
+  }
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.optimizedIntermediateWaypointIndex'
+      'X-Goog-FieldMask': 'routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.optimizedIntermediateWaypointIndex'
     },
     body: JSON.stringify(requestBody)
   });
@@ -233,6 +239,9 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
 
   const totalMeters = route.distanceMeters || 0;
   const totalSeconds = parseSeconds(route.duration);
+  // staticDuration is the same trip with no traffic, so the difference is what traffic adds
+  const noTrafficSeconds = parseSeconds(route.staticDuration) || totalSeconds;
+  const trafficDelayMinutes = Math.max(0, Math.round((totalSeconds - noTrafficSeconds) / 60));
 
   const totalDistanceMiles = Number((totalMeters / 1609.344).toFixed(2));
   const totalDurationMinutes = Math.max(1, Math.round(totalSeconds / 60));
@@ -262,10 +271,11 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
   const routeInformation = {
     store_hub: STORE_HUB,
     round_trip: true,
-    travel_mode: 'WALK',
+    travel_mode: 'DRIVE',
     departure_time: departureDate.toISOString(),
     total_distance_miles: totalDistanceMiles,
     total_duration_minutes: totalDurationMinutes,
+    traffic_delay_minutes: trafficDelayMinutes,
     waypoint_order: waypointOrder,
     overview_polyline: route.polyline?.encodedPolyline || '',
     legs: summarizedLegs,
@@ -287,13 +297,13 @@ async function fetchFromRoutesApi(orders, departureDate, apiKey) {
   };
 }
 
-// Legacy Google Maps Directions API fallback (directions/json) using walking mode
+// Legacy Google Maps Directions API fallback (directions/json) using driving mode with traffic
 async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   const origin = `${STORE_HUB.lat},${STORE_HUB.lng}`;
   const destination = `${STORE_HUB.lat},${STORE_HUB.lng}`;
   const waypoints = `${orders.length > 1 ? 'optimize:true|' : ''}${orders.map(o => `${o.delivery_lat},${o.delivery_lng}`).join('|')}`;
 
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&mode=walking&key=${apiKey}`;
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&mode=driving&departure_time=now&traffic_model=best_guess&key=${apiKey}`;
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -317,13 +327,16 @@ async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   }
   const legs = route.legs || [];
 
+  // duration_in_traffic is the time with traffic, and duration is without it
   let totalMeters = 0;
   let totalSeconds = 0;
+  let noTrafficSeconds = 0;
   legs.forEach(leg => {
     totalMeters += leg.distance?.value || 0;
-    const legSecs = leg.duration?.value || 0;
-    totalSeconds += legSecs;
+    totalSeconds += (leg.duration_in_traffic || leg.duration)?.value || 0;
+    noTrafficSeconds += leg.duration?.value || 0;
   });
+  const trafficDelayMinutes = Math.max(0, Math.round((totalSeconds - noTrafficSeconds) / 60));
 
   const totalDistanceMiles = Number((totalMeters / 1609.344).toFixed(2));
   const totalDurationMinutes = Math.max(1, Math.round(totalSeconds / 60));
@@ -332,7 +345,7 @@ async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   const orderedStops = waypointOrder.map((orderIndex, sequenceIndex) => {
     const order = (typeof orderIndex === 'number' && orders[orderIndex]) ? orders[orderIndex] : orders[sequenceIndex];
     const leg = legs[sequenceIndex];
-    const legSeconds = leg?.duration?.value || 0;
+    const legSeconds = (leg?.duration_in_traffic || leg?.duration)?.value || 0;
     cumulativeSeconds += legSeconds;
 
     return {
@@ -355,10 +368,11 @@ async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   const routeInformation = {
     store_hub: STORE_HUB,
     round_trip: true,
-    travel_mode: 'WALK',
+    travel_mode: 'DRIVE',
     departure_time: departureDate.toISOString(),
     total_distance_miles: totalDistanceMiles,
     total_duration_minutes: totalDurationMinutes,
+    traffic_delay_minutes: trafficDelayMinutes,
     waypoint_order: waypointOrder,
     overview_polyline: route.overview_polyline?.points || '',
     legs: summarizedLegs,
@@ -380,10 +394,10 @@ async function fetchFromDirectionsApi(orders, departureDate, apiKey) {
   };
 }
 
-// Fallback walking route for when there's no Google key or Google can't be reached:
-// 1. Tries the free OpenStreetMap walking route server, which follows sidewalks and footpaths
+// Fallback road route for when there's no Google key or Google can't be reached:
+// 1. Tries the free OpenStreetMap road route server. It has no live traffic, so there's no traffic delay.
 // 2. If that can't be reached either, draws a path that turns at street corners instead of cutting through blocks
-async function fetchFallbackWalkingRoute(orders, departureDate = new Date()) {
+async function fetchFallbackRoute(orders, departureDate = new Date()) {
   const waypoints = [
     STORE_HUB,
     ...orders.map(o => ({ lat: Number(o.delivery_lat), lng: Number(o.delivery_lng) })),
@@ -397,7 +411,7 @@ async function fetchFallbackWalkingRoute(orders, departureDate = new Date()) {
 
   try {
     const coordStr = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
-    const osrmUrl = `https://routing.openstreetmap.de/routed-foot/route/v1/driving/${coordStr}?overview=full&geometries=polyline`;
+    const osrmUrl = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${coordStr}?overview=full&geometries=polyline`;
     // The server asks apps to say who they are
     const res = await fetch(osrmUrl, {
       headers: { 'User-Agent': 'OFS-Food-Delivery (SJSU CS160 class project)' },
@@ -446,7 +460,8 @@ async function fetchFallbackWalkingRoute(orders, departureDate = new Date()) {
     routeInformation: {
       store_hub: STORE_HUB,
       round_trip: true,
-      travel_mode: 'WALK',
+      travel_mode: 'DRIVE',
+      traffic_delay_minutes: null,
       waypoint_order: orders.map((_, idx) => idx),
       total_distance_miles: totalDistanceMiles,
       total_duration_minutes: totalDurationMinutes,
@@ -464,9 +479,9 @@ async function fetchFallbackWalkingRoute(orders, departureDate = new Date()) {
   };
 }
 
-// Requests an optimized multi-stop round-trip walking route.
-// Uses Google Maps Routes API (or Directions API) in walking mode.
-// Falls back to the OpenStreetMap walking route or a street-grid path when the API key is missing or calls fail.
+// Requests an optimized multi-stop round-trip driving route with traffic.
+// Uses Google Maps Routes API (or Directions API) in driving mode.
+// Falls back to the OpenStreetMap road route or a street-grid path when the API key is missing or calls fail.
 async function getOptimizedRoute(orders, departureDate = new Date()) {
   if (!orders || orders.length === 0) {
     throw new Error('No orders provided for route optimization.');
@@ -475,21 +490,21 @@ async function getOptimizedRoute(orders, departureDate = new Date()) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
-    return await fetchFallbackWalkingRoute(orders, departureDate);
+    return await fetchFallbackRoute(orders, departureDate);
   }
 
-  // 1. Primary: Google Maps Routes API (WALK mode)
+  // 1. Primary: Google Maps Routes API (driving with traffic)
   try {
     return await fetchFromRoutesApi(orders, departureDate, apiKey);
   } catch (routesErr) {
-    // 2. Secondary fallback: Google Maps Directions API (walking mode)
+    // 2. Secondary fallback: Google Maps Directions API (driving with traffic)
     try {
       return await fetchFromDirectionsApi(orders, departureDate, apiKey);
     } catch (directionsErr) {
       console.warn('[Google Routing Error - Routes API]:', routesErr.message);
       console.warn('[Google Routing Error - Directions API]:', directionsErr.message);
-      // 3. Fallback to the OpenStreetMap walking route or street grid so trips never fail completely
-      return await fetchFallbackWalkingRoute(orders, departureDate);
+      // 3. Fallback to the OpenStreetMap road route or street grid so trips never fail completely
+      return await fetchFallbackRoute(orders, departureDate);
     }
   }
 }

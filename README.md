@@ -11,7 +11,7 @@ What we're using:
 * Database: MySQL
 * Logins: sessions with express-session, and passwords hashed with bcrypt
 * Payments: Stripe test mode
-* Maps and routing: Google Maps Platform (Geocoding API, Routes API walking routes, and the Maps JavaScript API for the map)
+* Maps and routing: Google Maps Platform (Geocoding API, Routes API driving routes with traffic, and the Maps JavaScript API for the map)
 
 ## How to run it
 
@@ -67,9 +67,9 @@ Make a file named `.env` in the main project folder (next to `server.js`) with t
 
 Git ignores `.env`, so it never gets uploaded. Everyone makes their own. The database password and session secret don't need to match anyone else's, but the Stripe keys are the same for everyone.
 
-**The Stripe keys:** the team shares one Stripe account in test mode, so no real money ever moves. Ask Sean for the keys in a private message. Never put them in the code, on GitHub, or in a public channel. The publishable key (`pk_test_`) is fine for browsers to see, but the secret key (`sk_test_`) can make charges and refunds, so it has to stay private. Without the keys the site still runs, but checkout says payments aren't set up.
+**The Stripe keys:** the team shares one Stripe account in test mode, so no real money ever moves. Ask Sean for the keys in a private message. Never put them in the code, on GitHub, or in a public channel. The publishable key (`pk_test_`) is fine for browsers to see, but the secret key (`sk_test_`) can make charges and refunds, so it has to stay private. Without the keys the site still runs, and checkout uses a practice payment instead, where you pick whether it goes through or gets declined. Nothing is charged either way, so anyone can try the whole site without a Stripe account.
 
-**The Google Maps key:** used to find where each delivery address really is, plan each robot trip as a walking route with the best stop order, and show the Google map. Robots ride on sidewalks, so trips use walking routes, and each stop's time comes from the route itself. The team shares one key, so ask Sean for it in a private message, the same as the Stripe keys. Without the key, the site still runs: addresses get approximate spots near downtown, routes come from the free OpenStreetMap walking route server, and the map uses OpenStreetMap.
+**The Google Maps key:** used to find where each delivery address really is, plan each robot trip as a driving route with the best stop order, and show the Google map. The robot is a self-driving vehicle, so its route uses the traffic at the moment it leaves, each stop's time comes from that route, and the route map shows how many minutes traffic adds. The team shares one key, so ask Sean for it in a private message, the same as the Stripe keys. Without the key, the site still runs: addresses get approximate spots near downtown, routes come from the free OpenStreetMap road route server (which has no traffic), and the map uses OpenStreetMap.
 
 **How to get a Google Maps API key (step by step):**
 
@@ -107,16 +107,14 @@ If you get an error saying port 3000 is already in use, the server is probably s
 
 ## Test accounts
 
-Anyone who registers on the site is a customer. To test the employee and manager pages, register the accounts below with the password `12345678`, then run this in MySQL Workbench:
-
-    UPDATE Users SET role = 'employee' WHERE email = 'employee1@gmail.com';
-    UPDATE Users SET role = 'manager' WHERE email = 'manager1@gmail.com';
+The server makes these accounts when it starts, if they aren't there yet. They all use the password `12345678`. Anyone who registers on the site is a customer.
 
 * `customer1@gmail.com` customer
+* `customer2@gmail.com` customer
 * `employee1@gmail.com` employee
 * `manager1@gmail.com` manager
 
-Log out and back in after changing a role, since the role is saved when you log in.
+These are only for testing on your own computer. An account that already exists keeps its password, and employee1 and manager1 always get their roles back when the server starts.
 
 ## Testing payments
 
@@ -162,6 +160,7 @@ Each page is its own file in `public/js/pages`. The part of the URL after the # 
 * `#/employee-packing` employee-packing.js
 * `#/employee-shipping` employee-shipping.js, where employees pick a robot and send out a trip
 * `#/manager` manager.js
+* `#/employee-inventory` the same page for employees, who can check stock and change it but can't edit, add, or remove products
 * `#/manager-inventory` manager-inventory.js, where managers add, edit, and remove products, change stock, and see what's running low (at or below its reorder level)
 * `#/manager-orders` manager-orders.js, where clicking an order shows the products in it
 * `#/manager-transactions` manager-transactions.js, the payments and refunds from Stripe matched to our orders
@@ -198,8 +197,8 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 * `GET /deliveries`, `GET /deliveries/:id`, `PUT /deliveries/:id/complete` robot trips
 * `GET /maps-key` Google Maps API key for the frontend interactive map
 * `GET /employee/orders` paid orders that need to be packed (employees and managers only)
-* `GET /manager/inventory` stock for every product (managers only)
-* `PATCH /manager/inventory/:productId` raise or lower one product's stock (managers only)
+* `GET /inventory` stock for every product (employees and managers)
+* `PATCH /inventory/:productId` raise or lower one product's stock (employees and managers)
 * `GET /transactions` payments and refunds from Stripe, matched to orders by Stripe ID (managers only)
 * `GET /notifications` the 50 newest notifications for whoever is logged in
 * `PUT /notifications/:id/read` mark one of your own notifications as read
@@ -210,7 +209,7 @@ The rest of the planned routes are in the API Design section of our Part 2 docum
 
 The backlog in our Part 2 document says who is doing what.
 
-1. Delivery routes and Google Maps integration (Completed: geocoding, multi-stop round-trip walking routes with the best stop order, the interactive map, and the trip simulation).
+1. Delivery routes and Google Maps integration (Completed: geocoding, multi-stop round-trip driving routes with traffic and the best stop order, the interactive map, and the trip simulation).
 2. Password reset.
 3. Test everything using the test plan from Part 2.
 

@@ -2,6 +2,9 @@ import { cartRequest, money } from '../cart-api.js';
 import { getUser } from '../user.js';
 import { addressFields, readAddress } from '../address-form.js';
 
+// True when the server has no Stripe keys, so checkout uses a practice payment
+let practiceMode = false;
+
 export default {
   title: 'Checkout',
   async show(app) {
@@ -36,7 +39,8 @@ export default {
       }
 
       // The publishable key lets the page show Stripe's card box
-      const { publishableKey } = await cartRequest('GET', '/stripe-key');
+      const { publishableKey, practice } = await cartRequest('GET', '/stripe-key');
+      practiceMode = Boolean(practice);
 
       renderCheckout(app, cart, savedAddress, publishableKey);
     } catch (err) {
@@ -99,19 +103,30 @@ function renderCheckout(app, cart, savedAddress, publishableKey, errorMessage = 
 
         <h2>Payment Information</h2>
         <div class="card" style="margin-bottom: 20px;">
-          <p class="muted" style="margin-top: 0; font-size: 13px;">
-            Card details go straight to Stripe and never touch our server. This is Stripe test mode, so no real money is charged.
-          </p>
-          <label style="display: block; font-weight: bold; margin-bottom: 6px;">Card</label>
-          <div id="card-element" style="padding: 12px; border: 1px solid #ccc; border-radius: 6px; background: white;"></div>
-          <p class="message" id="card-error" style="font-size: 14px;"></p>
+          ${practiceMode ? `
+            <p class="muted" style="margin-top: 0; font-size: 13px;">
+              This server has no Stripe keys, so checkout uses a practice payment. Nothing is charged.
+            </p>
+            <label for="practice-result" style="display: block; font-weight: bold; margin-bottom: 6px;">Practice payment</label>
+            <select id="practice-result" class="practice-result">
+              <option value="approved">Goes through</option>
+              <option value="declined">Gets declined</option>
+            </select>
+          ` : `
+            <p class="muted" style="margin-top: 0; font-size: 13px;">
+              Card details go straight to Stripe and never touch our server. This is Stripe test mode, so no real money is charged.
+            </p>
+            <label style="display: block; font-weight: bold; margin-bottom: 6px;">Card</label>
+            <div id="card-element" style="padding: 12px; border: 1px solid #ccc; border-radius: 6px; background: white;"></div>
+            <p class="message" id="card-error" style="font-size: 14px;"></p>
 
-          <div style="background: #f0f7f1; padding: 10px; border-radius: 6px; font-size: 13px; line-height: 1.6;">
-            <b>Test card (Stripe test mode)</b><br>
-            Card number: 4242 4242 4242 4242, or 4000 0000 0000 0002 to test a declined card<br>
-            Expiration: any month and year in the future, like 12 / 34<br>
-            CVC: any 3 digits, like 123
-          </div>
+            <div style="background: #f0f7f1; padding: 10px; border-radius: 6px; font-size: 13px; line-height: 1.6;">
+              <b>Test card (Stripe test mode)</b><br>
+              Card number: 4242 4242 4242 4242, or 4000 0000 0000 0002 to test a declined card<br>
+              Expiration: any month and year in the future, like 12 / 34<br>
+              CVC: any 3 digits, like 123
+            </div>
+          `}
         </div>
 
         <p class="message" id="checkout-error">${errorMessage}</p>
@@ -136,23 +151,28 @@ function renderCheckout(app, cart, savedAddress, publishableKey, errorMessage = 
   }
 
   // Stripe's card box lives on Stripe's own servers, so the card number typed
-  // into it goes straight to Stripe and our code never sees it
-  if (!publishableKey || !window.Stripe) {
-    errorEl.textContent = 'Payments are not set up on this computer yet. Add the Stripe keys to .env and restart the server.';
-    placeBtn.disabled = true;
-    return;
-  }
-  const stripe = window.Stripe(publishableKey);
-  // The delivery address already has a ZIP box, so the card box doesn't ask for another one
-  const card = stripe.elements().create('card', { hidePostalCode: true, style: { base: { fontSize: '16px' } } });
-  card.mount('#card-element');
+  // into it goes straight to Stripe and our code never sees it.
+  // A practice payment doesn't need the card box at all.
+  let stripe = null;
+  let card = null;
+  if (!practiceMode) {
+    if (!publishableKey || !window.Stripe) {
+      errorEl.textContent = 'Payments are not set up on this computer yet. Add the Stripe keys to .env and restart the server.';
+      placeBtn.disabled = true;
+      return;
+    }
+    stripe = window.Stripe(publishableKey);
+    // The delivery address already has a ZIP box, so the card box doesn't ask for another one
+    card = stripe.elements().create('card', { hidePostalCode: true, style: { base: { fontSize: '16px' } } });
+    card.mount('#card-element');
 
-  // Stripe checks the card while it's typed, so show what's wrong right away,
-  // like an expiration date that's already passed
-  const cardError = app.querySelector('#card-error');
-  card.on('change', (event) => {
-    cardError.textContent = event.error ? event.error.message : '';
-  });
+    // Stripe checks the card while it's typed, so show what's wrong right away,
+    // like an expiration date that's already passed
+    const cardError = app.querySelector('#card-error');
+    card.on('change', (event) => {
+      cardError.textContent = event.error ? event.error.message : '';
+    });
+  }
 
   placeBtn.addEventListener('click', async () => {
     const address = readAddress(app);
@@ -168,15 +188,21 @@ function renderCheckout(app, cart, savedAddress, publishableKey, errorMessage = 
     errorEl.textContent = '';
 
     try {
-      // Stripe turns the card into a payment method ID, and only that ID comes to our server
-      const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card });
-      if (error) {
-        throw new Error(error.message);
+      let payment;
+      if (practiceMode) {
+        payment = { practice_result: app.querySelector('#practice-result').value };
+      } else {
+        // Stripe turns the card into a payment method ID, and only that ID comes to our server
+        const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card });
+        if (error) {
+          throw new Error(error.message);
+        }
+        payment = { payment_method_id: paymentMethod.id };
       }
 
       const result = await cartRequest('POST', '/checkout', {
         delivery_address: address,
-        payment_method_id: paymentMethod.id,
+        ...payment,
         expected_total: cart.total
       });
 

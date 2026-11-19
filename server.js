@@ -14,7 +14,7 @@ const cartRoutes = require('./routes/cart');
 const employeeRoutes = require('./routes/employee');
 const orderRoutes = require('./routes/orders');
 const deliveryRoutes = require('./routes/deliveries');
-const managerRoutes = require('./routes/manager');
+const inventoryRoutes = require('./routes/inventory');
 const productRoutes = require('./routes/products');
 const transactionRoutes = require('./routes/transactions');
 const notificationRoutes = require('./routes/notifications');
@@ -73,8 +73,8 @@ app.use('/', notificationRoutes);
 // This is the real check, since anyone can open the page files in a browser.
 app.use('/employee', loginVerification, roleVerification('employee', 'manager'), employeeRoutes);
 
-// Only managers can get manager data.
-app.use('/manager', loginVerification, roleVerification('manager'), managerRoutes);
+// Stock for employees and managers. Each route checks the role itself.
+app.use('/', inventoryRoutes);
 
 // Set up the database first (tables, new columns, and sample products), then start the server
 initializeDatabase()

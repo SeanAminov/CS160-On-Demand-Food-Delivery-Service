@@ -104,6 +104,8 @@ router.get('/transactions', loginVerification, roleVerification('manager'), asyn
 
     res.json({
       stripe_connected: stripeRecords !== null,
+      // No Stripe keys means checkout uses practice payments, which only live in our database
+      practice_mode: !stripe,
       transactions: matchWithStripe(savedRows, stripeRecords)
     });
   } catch (err) {

@@ -32,6 +32,10 @@ export default {
         <a class="button" href="#/employee-shipping">
           Waiting to Ship
         </a>
+
+        <a class="button" href="#/employee-inventory">
+          Inventory
+        </a>
       </nav>
 
       <section class="card">

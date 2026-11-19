@@ -7,13 +7,13 @@ const {
 
 const router = express.Router();
 
-// All manager routes require a logged-in manager.
-router.use(
-  loginVerification, roleVerification('manager')
-);
+// Employees and managers can both see and change stock. Changing a product's
+// details, adding, and removing products stay manager only (routes/products.js).
+const staffOnly = [loginVerification, roleVerification('employee', 'manager')];
 
-// Read inventory
-router.get('/inventory', async (req, res) => {
+// GET /inventory (Role: Employee, Manager)
+// Stock for every product that's for sale
+router.get('/inventory', staffOnly, async (req, res) => {
   try {
     const [inventory] = await pool.query(`
       SELECT
@@ -35,7 +35,7 @@ router.get('/inventory', async (req, res) => {
 
     res.json(inventory);
   } catch (error) {
-    console.error('Manager inventory error:', error);
+    console.error('Inventory error:', error);
 
     res.status(500).json({
       error: 'Could not load inventory.',
@@ -43,8 +43,9 @@ router.get('/inventory', async (req, res) => {
   }
 });
 
-// Adjust inventory quantity
-router.patch('/inventory/:productId', async (req, res) => {
+// PATCH /inventory/:productId (Role: Employee, Manager)
+// Raises or lowers one product's stock by the change sent in
+router.patch('/inventory/:productId', staffOnly, async (req, res) => {
   const productId = Number(req.params.productId);
   const change = Number((req.body || {}).change);
 
