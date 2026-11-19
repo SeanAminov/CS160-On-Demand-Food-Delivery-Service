@@ -73,6 +73,14 @@ function generateGridPathway(stops) {
   return points;
 }
 
+// How much traffic adds to the trip, for the route map header. Routes planned
+// without a Google key have no traffic data, so they show nothing extra.
+function trafficNote(routeData) {
+  const delay = routeData.traffic_delay_minutes;
+  if (delay === null || delay === undefined) return '';
+  return delay > 0 ? ` (traffic adds ${delay} min)` : ' (no traffic delay)';
+}
+
 // Fetch Google Maps API key from the server
 let cachedApiKey = undefined;
 async function fetchMapsKey() {
@@ -169,12 +177,12 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
             Store Hub: <b>${hub.name}</b> &bull; Round Trip Circuit (${orders.length} stops)
           </span>
           <div style="margin-top: 6px;">
-            <span class="route-mode-badge"><i class='bx bx-walk'></i> Sidewalks & Walking Paths</span>
+            <span class="route-mode-badge"><i class='bx bx-car'></i> ${routeData.traffic_delay_minutes != null ? 'Road Route Planned With Traffic' : 'Road Route'}</span>
           </div>
         </div>
         <div style="font-size: 13px; text-align: right;">
           <div>Est. Distance: <b>${trip.total_distance || trip.total_distance_miles || 0} mi</b></div>
-          <div>Est. Duration: <b>${trip.estimated_duration || trip.estimated_duration_mins || 0} mins</b></div>
+          <div>Est. Duration: <b>${trip.estimated_duration || trip.estimated_duration_mins || 0} mins</b>${trafficNote(routeData)}</div>
         </div>
       </div>
 
@@ -240,7 +248,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
   if (apiKey) {
     try {
       await loadGoogleMaps(apiKey);
-      statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active (Walking Paths)</span>`;
+      statusBar.innerHTML = `<span style="color: #166534; font-size: 12px;"><i class='bx bx-check-shield'></i> Google Maps Platform active (Driving With Traffic)</span>`;
       drawn = renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId, trip);
     } catch (err) {
       console.warn('Google Maps script load failed, falling back to Leaflet:', err);
@@ -254,7 +262,7 @@ export async function renderRouteMap(containerElement, trip, options = {}) {
       statusBar.innerHTML = `
         <div style="background: #fefce8; border: 1px solid #fef08a; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #854d0e; display: flex; align-items: center; gap: 6px;">
           <i class='bx bx-info-circle' style="font-size: 16px;"></i>
-          <span><b>Interactive Map:</b> Showing the walking route the robot takes.</span>
+          <span><b>Interactive Map:</b> Showing the road route the robot takes. Add a Google Maps key to plan routes with traffic.</span>
         </div>
       `;
       drawn = renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId, trip);
@@ -327,7 +335,7 @@ async function renderDestinationMap(containerElement, order) {
         ${
           order.status === 'Preparing' || order.status === 'Pending'
             ? 'Your groceries are currently being packed at the Downtown Hub. Once packed and staged, our autonomous delivery robot will be dispatched on the optimal route.'
-            : 'Your order is staged and waiting for robot assignment. The walking route and arrival times are set when the robot leaves.'
+            : 'Your order is staged and waiting for robot assignment. The route and arrival times are planned with traffic when the robot leaves.'
         }
       </div>
     </div>
@@ -466,7 +474,7 @@ function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = nul
     pathPoints = generateGridPathway(stopCoords);
   }
 
-  // Draw the walking route
+  // Draw the route
   new google.maps.Polyline({
     path: pathPoints,
     geodesic: true,
@@ -499,8 +507,8 @@ function renderWithGoogleMaps(canvas, hub, orders, routeData, focusOrderId = nul
         content: `
           <div style="padding: 4px; font-size: 13px;">
             <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
-            <span>Following sidewalks and crosswalks.</span><br/>
-            <span style="color: #666; font-size: 11px;">Speed: about walking pace &bull; Zero emissions</span>
+            <span>Self-driving delivery vehicle on city streets.</span><br/>
+            <span style="color: #666; font-size: 11px;">Speed: city traffic &bull; Zero emissions</span>
           </div>
         `
       });
@@ -606,8 +614,8 @@ function renderWithLeaflet(canvas, hub, orders, routeData, focusOrderId = null, 
       robotMarker = window.L.marker([point.lat, point.lng], { icon: robotIcon })
         .bindPopup(`
           <strong style="color: #047857;">🤖 ${trip?.robot || 'Autonomous Delivery Robot'}</strong><br/>
-          <span>Following sidewalks and crosswalks.</span><br/>
-          <span style="color: #666; font-size: 11px;">Speed: about walking pace &bull; Zero emissions</span>
+          <span>Self-driving delivery vehicle on city streets.</span><br/>
+          <span style="color: #666; font-size: 11px;">Speed: city traffic &bull; Zero emissions</span>
         `)
         .addTo(map);
     }
