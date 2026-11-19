@@ -30,6 +30,26 @@ PREPARE add_address_column_statement FROM @add_address_column_sql;
 EXECUTE add_address_column_statement;
 DEALLOCATE PREPARE add_address_column_statement;
 
+-- Test accounts, so everyone (and the TA) gets the same ones when the server starts.
+-- They all use the password 12345678, which is only for testing on your own computer.
+-- An account that already exists is left alone, except employee1 and manager1 always
+-- get their roles, in case someone registered them before this was here.
+SET @test_password = '$2b$10$4THOR/N34/6OdefmCVxR7e1BCVwh.RP52VdLBoHsKUEoyKjOWmoD.';
+INSERT INTO Users (name, email, password_hash, role)
+SELECT 'Customer One', 'customer1@gmail.com', @test_password, 'customer'
+WHERE NOT EXISTS (SELECT 1 FROM Users WHERE email = 'customer1@gmail.com');
+INSERT INTO Users (name, email, password_hash, role)
+SELECT 'Customer Two', 'customer2@gmail.com', @test_password, 'customer'
+WHERE NOT EXISTS (SELECT 1 FROM Users WHERE email = 'customer2@gmail.com');
+INSERT INTO Users (name, email, password_hash, role)
+SELECT 'Employee One', 'employee1@gmail.com', @test_password, 'employee'
+WHERE NOT EXISTS (SELECT 1 FROM Users WHERE email = 'employee1@gmail.com');
+INSERT INTO Users (name, email, password_hash, role)
+SELECT 'Manager One', 'manager1@gmail.com', @test_password, 'manager'
+WHERE NOT EXISTS (SELECT 1 FROM Users WHERE email = 'manager1@gmail.com');
+UPDATE Users SET role = 'employee' WHERE email = 'employee1@gmail.com';
+UPDATE Users SET role = 'manager' WHERE email = 'manager1@gmail.com';
+
 CREATE TABLE IF NOT EXISTS Products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
