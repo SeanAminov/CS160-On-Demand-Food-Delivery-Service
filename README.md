@@ -13,32 +13,35 @@ What we're using:
 * Payments: Stripe test mode
 * Maps and routing: Google Maps Platform (Geocoding API, Routes API driving routes with traffic, and the Maps JavaScript API for the map)
 
+How-to video (installing, setting up, and using the site without any keys): https://youtu.be/l5feufN-W3I
+
 ## Run it with Docker (easiest)
 
 This is the quickest way to try the whole site. Docker runs the website and its own MySQL database together, so you don't need to install Node.js or MySQL.
 
-1. Install Docker Desktop from https://www.docker.com/products/docker-desktop/ and open it. It works on Windows and Mac, including Apple Silicon Macs.
-2. Get the code (see step 3 below), and open a terminal in the project folder (step 4 below).
-3. Run:
+1. Install Docker Desktop from https://www.docker.com/products/docker-desktop/ and open it. It works on Windows and Mac, including Apple Silicon Macs. On Windows, the installer may set up WSL 2 and ask you to restart. Signing in to Docker is optional. Wait until it says Docker is running.
+2. Get the code. Either press the green Code button at the top of this page, choose Download ZIP, and unzip it, or clone it with Git (see step 3 below).
+3. Open a terminal in the folder that has `docker-compose.yml` in it (see step 4 below). If you unzipped the download on Windows, that's the inner folder with the same name.
+4. Run:
 
         docker compose up --build
 
-4. When the terminal says `Server running`, open http://localhost:3000. The first start takes a few minutes while Docker downloads Node.js and MySQL.
+5. When the terminal says `Server running`, open http://localhost:3000. The first start takes a few minutes while Docker downloads Node.js and MySQL.
 
-The database, tables, sample products, and test accounts are made automatically the first time the server starts, and they stay there between runs. The test accounts are listed under Test accounts below.
+The first time the server starts, it makes the database, the tables, the sample products, and the test accounts, and they stay there between runs. The test accounts are listed under Test accounts below.
 
 * Stop the site: press Ctrl+C in that terminal, or run `docker compose down`.
 * Start it again later: `docker compose up`. Your orders and accounts are still there.
 * Start over with a fresh database: `docker compose down -v`, then `docker compose up`.
 * If something else is using port 3000, pick another port, like `OFS_PORT=3100 docker compose up` on Mac, or `$env:OFS_PORT=3100; docker compose up` in Windows PowerShell, then open http://localhost:3100.
 
-The site works without any keys. Checkout uses practice payments, where you pick whether the payment goes through or gets declined, and robot routes come from OpenStreetMap without traffic. To use Stripe test mode and Google driving routes with traffic, make a `.env` file next to `docker-compose.yml` with these lines, then run `docker compose up` again:
+The site works without any keys. Checkout uses practice payments, where you pick whether the payment goes through or gets declined, and robot routes come from OpenStreetMap without traffic. For the full features, Stripe test mode checkout and Google driving routes with live traffic, add your keys. Make a `.env` file next to `docker-compose.yml` (run `notepad .env` on Windows or `nano .env` on a Mac) with these lines, then run `docker compose up` again:
 
     STRIPE_PUBLISHABLE_KEY=pk_test_your_key
     STRIPE_SECRET_KEY=sk_test_your_key
     GOOGLE_MAPS_API_KEY=your_google_key
 
-The keys stay on your computer. They're never copied into the Docker image.
+Stripe's test keys are in the Stripe dashboard under Developers, then API keys. A Google Maps key needs the Geocoding API, Routes API, and Maps JavaScript API turned on (see How to get a Google Maps API key below). The keys stay on your computer. They're never copied into the Docker image.
 
 The same `.env` file can also change the sales tax rate with a line like `TAX_RATE=0.0925`. It's 0.09375 (9.375 percent, San Jose's rate) if you leave it out.
 
@@ -157,6 +160,8 @@ Cancelling a paid order refunds it through Stripe. Payments and refunds show up 
 
 When a card is declined, the order is still saved with the status Declined, along with its items, so managers can see who tried and what was in the cart on Order Management and Transaction History. Nothing is charged, the stock doesn't change, and the customer's cart stays the same so they can try another card.
 
+Without Stripe keys, checkout shows a practice payment instead, where you pick whether it goes through or gets declined. Declines, cancels, and refunds work the same way, and nothing is charged.
+
 ## Folders
 
     server.js          the Express server
@@ -182,6 +187,7 @@ Each page is its own file in `public/js/pages`. The part of the URL after the # 
 
 * `#/` home.js
 * `#/login` login.js
+* `#/forgot-password` forgot-password.js, which shows the reset code on the page since the site doesn't send email
 * `#/register` register.js
 * `#/catalog` catalog.js
 * `#/cart` cart.js
@@ -218,6 +224,7 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 * `PUT /products/:id` change a product's name, price, weight, category, description, photo, and low stock level (managers only)
 * `DELETE /products/:id` take a product out of the shop and out of every cart. Old orders still show it (managers only)
 * `POST /register`, `POST /login`, `POST /logout` accounts
+* `POST /forgot-password/code`, `POST /forgot-password/reset` get a reset code and set a new password
 * `GET /profile` who is logged in
 * `GET /profile/address`, `PUT /profile/address` the logged in user's saved delivery address
 * `DELETE /profile` delete the logged in user's own account
@@ -243,15 +250,9 @@ To work on a page, open its file and change what `show()` puts on the page. `cat
 
 The rest of the planned routes are in the API Design section of our Part 2 document.
 
-## Next steps
+## Status
 
-The backlog in our Part 2 document says who is doing what.
-
-1. Delivery routes and Google Maps integration (Completed: geocoding, multi-stop round-trip driving routes with traffic and the best stop order, the interactive map, and the trip simulation).
-2. Password reset.
-3. Test everything using the test plan from Part 2.
-
-Part III, the working site and our 12 minute presentation, is due 11/23.
+Everything planned for Part III is done: delivery routes and Google Maps (geocoding, multi-stop round-trip driving routes with traffic and the best stop order, the interactive map, and the trip simulation), password reset, account deletion, Docker, and testing with the test plan from Part 2. Our Part III document has the backlog with who did what, the meeting minutes, and the test results.
 
 ## Working on the repo
 
