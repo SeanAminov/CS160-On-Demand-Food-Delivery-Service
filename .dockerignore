@@ -1,0 +1,9 @@
+# Keeps these out of the image. The keys in .env are never copied in, and the
+# packages get installed fresh inside the image.
+node_modules
+.env
+.git
+.github
+.claude
+*.pdf
+*.log
