@@ -13,7 +13,36 @@ What we're using:
 * Payments: Stripe test mode
 * Maps and routing: Google Maps Platform (Geocoding API, Routes API driving routes with traffic, and the Maps JavaScript API for the map)
 
-## How to run it
+## Run it with Docker (easiest)
+
+This is the quickest way to try the whole site. Docker runs the website and its own MySQL database together, so you don't need to install Node.js or MySQL.
+
+1. Install Docker Desktop from https://www.docker.com/products/docker-desktop/ and open it. It works on Windows and Mac, including Apple Silicon Macs.
+2. Get the code (see step 3 below), and open a terminal in the project folder (step 4 below).
+3. Run:
+
+        docker compose up --build
+
+4. When the terminal says `Server running`, open http://localhost:3000. The first start takes a few minutes while Docker downloads Node.js and MySQL.
+
+The database, tables, sample products, and test accounts are made automatically the first time the server starts, and they stay there between runs. The test accounts are listed under Test accounts below.
+
+* Stop the site: press Ctrl+C in that terminal, or run `docker compose down`.
+* Start it again later: `docker compose up`. Your orders and accounts are still there.
+* Start over with a fresh database: `docker compose down -v`, then `docker compose up`.
+* If something else is using port 3000, pick another port, like `OFS_PORT=3100 docker compose up` on Mac, or `$env:OFS_PORT=3100; docker compose up` in Windows PowerShell, then open http://localhost:3100.
+
+The site works without any keys. Checkout uses practice payments, where you pick whether the payment goes through or gets declined, and robot routes come from OpenStreetMap without traffic. To use Stripe test mode and Google driving routes with traffic, make a `.env` file next to `docker-compose.yml` with these lines, then run `docker compose up` again:
+
+    STRIPE_PUBLISHABLE_KEY=pk_test_your_key
+    STRIPE_SECRET_KEY=sk_test_your_key
+    GOOGLE_MAPS_API_KEY=your_google_key
+
+The keys stay on your computer. They're never copied into the Docker image.
+
+The same `.env` file can also change the sales tax rate with a line like `TAX_RATE=0.0925`. It's 0.09375 (9.375 percent, San Jose's rate) if you leave it out.
+
+## How to run it without Docker
 
 The commands are the same on Windows and Mac. The only differences are how you install things and how you open a terminal in the project folder.
 
@@ -131,6 +160,8 @@ When a card is declined, the order is still saved with the status Declined, alon
 ## Folders
 
     server.js          the Express server
+    Dockerfile         builds the website's Docker image
+    docker-compose.yml runs the website and MySQL together with Docker
     db.js              the MySQL connection, and the setup that runs schema.sql when the server starts
     auth.js            password hashing and the login and role checks
     address.js         checks delivery addresses for checkout and My Account
