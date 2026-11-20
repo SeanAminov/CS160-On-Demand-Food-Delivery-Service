@@ -1,0 +1,50 @@
+# Runs OFS with its own MySQL database. From this folder:
+#   docker compose up --build
+# Then open http://localhost:3000. The first time the server starts, it makes the
+# tables, the sample products, and the test accounts, so there's nothing to load by hand.
+#
+# Keys are optional. Without them, checkout uses practice payments and routes come
+# from OpenStreetMap. To use Stripe test mode and Google routes with traffic, put the
+# keys in a .env file next to this one (see the README).
+
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ofs_root_password
+      MYSQL_DATABASE: food_delivery_db
+      MYSQL_USER: ofs
+      MYSQL_PASSWORD: ofs_password
+    volumes:
+      - ofs-data:/var/lib/mysql
+    # Ready once it answers over the network, which only happens after its first time setup
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-pofs_root_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    ports:
+      # Set OFS_PORT if something else on your computer is already using 3000
+      - "${OFS_PORT:-3000}:3000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ofs
+      DB_PASSWORD: ofs_password
+      DB_NAME: food_delivery_db
+      SESSION_SECRET: ${SESSION_SECRET:-ofs-docker-session-secret}
+      # The sales tax rate. 0.09375 is San Jose's 9.375 percent.
+      TAX_RATE: ${TAX_RATE:-0.09375}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+
+volumes:
+  ofs-data:
